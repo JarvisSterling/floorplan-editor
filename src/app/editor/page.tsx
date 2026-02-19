@@ -7,11 +7,13 @@ import PropertiesPanel from '@/components/panels/PropertiesPanel';
 import Rulers from '@/components/editor/Rulers';
 import Minimap from '@/components/editor/Minimap';
 import useKeyboardShortcuts from '@/hooks/useKeyboardShortcuts';
+import useAutoSave from '@/hooks/useAutoSave';
 
 const EditorCanvas = dynamic(() => import('@/components/editor/Canvas'), { ssr: false });
 
 export default function EditorPage() {
   useKeyboardShortcuts();
+  useAutoSave();
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-gray-100">

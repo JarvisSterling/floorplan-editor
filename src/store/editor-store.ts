@@ -63,6 +63,21 @@ interface EditorState {
   undoStack: HistoryEntry[];
   redoStack: HistoryEntry[];
 
+  // Clipboard (F3)
+  clipboard: FloorPlanObject[];
+
+  // Background image (F1)
+  backgroundImageUrl: string | null;
+  backgroundOpacity: number;
+
+  // Auto-save (F2)
+  saveStatus: 'saved' | 'saving' | 'unsaved' | 'error';
+  isDirty: boolean;
+
+  // Space pan (F6)
+  isSpacePanning: boolean;
+  previousTool: ToolType | null;
+
   // Actions - Canvas
   setZoom: (zoom: number, centerX?: number, centerY?: number) => void;
   setPan: (x: number, y: number) => void;
@@ -99,10 +114,31 @@ interface EditorState {
   undo: () => void;
   redo: () => void;
 
+  // Actions - Clipboard (F3)
+  copySelection: () => void;
+  pasteClipboard: (offsetX?: number, offsetY?: number) => void;
+
+  // Actions - Background (F1)
+  setBackgroundImage: (url: string | null) => void;
+  setBackgroundOpacity: (opacity: number) => void;
+
+  // Actions - Auto-save (F2)
+  setSaveStatus: (status: 'saved' | 'saving' | 'unsaved' | 'error') => void;
+  markDirty: () => void;
+  markClean: () => void;
+
+  // Actions - Space pan (F6)
+  startSpacePan: () => void;
+  endSpacePan: () => void;
+
+  // Actions - Select all (F5)
+  selectAll: () => void;
+
   // Helpers
   snapToGrid: (val: number) => number;
   getSelectedObjects: () => FloorPlanObject[];
   createObject: (shape: ShapeType, type: ObjectType, props: Partial<FloorPlanObject>) => FloorPlanObject;
+  getLayerForObject: (type: ObjectType, shape: ShapeType) => LayerType;
 }
 
 const defaultDrawing: DrawingState = { isDrawing: false, startX: 0, startY: 0, currentX: 0, currentY: 0, points: [] };
@@ -132,6 +168,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   layers: defaultLayerState(),
   undoStack: [],
   redoStack: [],
+  clipboard: [],
+  backgroundImageUrl: null,
+  backgroundOpacity: 0.5,
+  saveStatus: 'saved',
+  isDirty: false,
+  isSpacePanning: false,
+  previousTool: null,
 
   setZoom: (zoom, centerX, centerY) => {
     const clamped = Math.min(5, Math.max(0.1, zoom));
@@ -156,7 +199,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => {
       const m = new Map(s.objects);
       m.set(obj.id, obj);
-      return { objects: m };
+      return { objects: m, isDirty: true, saveStatus: 'unsaved' as const };
     });
   },
   updateObject: (id, updates) => {
@@ -165,7 +208,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const m = new Map(s.objects);
       const existing = m.get(id);
       if (existing) m.set(id, { ...existing, ...updates, updated_at: new Date().toISOString() });
-      return { objects: m };
+      return { objects: m, isDirty: true, saveStatus: 'unsaved' as const };
     });
   },
   removeObjects: (ids) => {
@@ -173,7 +216,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => {
       const m = new Map(s.objects);
       ids.forEach((id) => m.delete(id));
-      return { objects: m, selectedObjectIds: new Set() };
+      return { objects: m, selectedObjectIds: new Set(), isDirty: true, saveStatus: 'unsaved' as const };
     });
   },
   setObjects: (objs) => {
@@ -229,6 +272,78 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     };
   }),
 
+  // F3: Copy/Paste
+  copySelection: () => {
+    const { objects, selectedObjectIds } = get();
+    const copied = Array.from(selectedObjectIds)
+      .map((id) => objects.get(id))
+      .filter(Boolean) as FloorPlanObject[];
+    set({ clipboard: copied.map((o) => ({ ...o, style: { ...o.style as Record<string, unknown> }, metadata: { ...o.metadata } })) });
+  },
+  pasteClipboard: (offsetX = 0.5, offsetY = 0.5) => {
+    const { clipboard, addObject } = get();
+    if (clipboard.length === 0) return;
+    const newIds: string[] = [];
+    const now = new Date().toISOString();
+    clipboard.forEach((obj) => {
+      const newId = uuidv4();
+      newIds.push(newId);
+      const newObj: FloorPlanObject = {
+        ...obj,
+        id: newId,
+        x: obj.x + offsetX,
+        y: obj.y + offsetY,
+        style: { ...obj.style as Record<string, unknown> },
+        metadata: { ...obj.metadata },
+        created_at: now,
+        updated_at: now,
+      };
+      // Use set directly to avoid multiple pushHistory calls
+      set((s) => {
+        const m = new Map(s.objects);
+        m.set(newObj.id, newObj);
+        return { objects: m, isDirty: true, saveStatus: 'unsaved' as const };
+      });
+    });
+    set({ selectedObjectIds: new Set(newIds) });
+  },
+
+  // F1: Background image
+  setBackgroundImage: (url) => set({ backgroundImageUrl: url, isDirty: true, saveStatus: 'unsaved' as const }),
+  setBackgroundOpacity: (opacity) => set({ backgroundOpacity: opacity }),
+
+  // F2: Auto-save status
+  setSaveStatus: (status) => set({ saveStatus: status }),
+  markDirty: () => set({ isDirty: true, saveStatus: 'unsaved' }),
+  markClean: () => set({ isDirty: false, saveStatus: 'saved' }),
+
+  // F6: Space pan
+  startSpacePan: () => {
+    const { activeTool, isSpacePanning } = get();
+    if (isSpacePanning) return;
+    set({ isSpacePanning: true, previousTool: activeTool });
+  },
+  endSpacePan: () => {
+    const { previousTool } = get();
+    set({ isSpacePanning: false, previousTool: null, activeTool: previousTool || 'select' });
+  },
+
+  // F5: Select all
+  selectAll: () => {
+    const { objects, layers } = get();
+    const ids: string[] = [];
+    objects.forEach((obj) => {
+      const layerKey = obj.layer === 'default' ? 'annotations' : obj.layer;
+      const ls = layers[layerKey as keyof typeof layers];
+      if (ls && !ls.visible) return;
+      if (ls && ls.locked) return;
+      if (obj.locked) return;
+      if (!obj.visible) return;
+      ids.push(obj.id);
+    });
+    set({ selectedObjectIds: new Set(ids) });
+  },
+
   snapToGrid: (val) => {
     const { gridSize, snapEnabled } = get();
     if (!snapEnabled) return val;
@@ -238,8 +353,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { objects, selectedObjectIds } = get();
     return Array.from(selectedObjectIds).map((id) => objects.get(id)).filter(Boolean) as FloorPlanObject[];
   },
+  getLayerForObject: (type, shape) => {
+    if (type === 'wall') return 'structure';
+    if (type === 'booth') return 'booths';
+    if (type === 'zone') return 'zones';
+    if (type === 'annotation') return 'annotations';
+    if (type === 'furniture' || type === 'infrastructure') return 'furniture';
+    if (shape === 'text') return 'annotations';
+    return 'furniture';
+  },
   createObject: (shape, type, props) => {
     const now = new Date().toISOString();
+    const defaultLayer = get().getLayerForObject(type, shape);
     return {
       id: uuidv4(),
       floor_plan_id: get().floorPlanId,
@@ -253,7 +378,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       rotation: 0,
       points: null,
       style: { fill: '#4A90D9', stroke: '#333333', strokeWidth: 1, opacity: 1 },
-      layer: 'default' as LayerType,
+      layer: defaultLayer,
       z_index: get().objects.size,
       locked: false,
       visible: true,

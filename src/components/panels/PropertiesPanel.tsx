@@ -195,11 +195,70 @@ export default function PropertiesPanel() {
         </div>
       )}
 
-      {/* Metadata */}
+      {/* F8: Custom Metadata Key-Value Editor */}
+      <div className="border-t border-gray-200 pt-3 mt-3">
+        <h4 className="text-sm font-semibold text-gray-600 mb-2">Custom Metadata</h4>
+        {Object.entries(obj.metadata || {}).filter(([k]) => !['booth_id', 'status', 'pricing_tier'].includes(k)).map(([key, value]) => (
+          <div key={key} className="flex gap-1 mb-1 items-center">
+            <input
+              type="text"
+              value={key}
+              readOnly
+              className="w-20 border rounded px-1 py-0.5 bg-gray-50 text-xs"
+            />
+            <input
+              type="text"
+              value={String(value ?? '')}
+              onChange={(e) => update({ metadata: { ...obj.metadata, [key]: e.target.value } })}
+              className="flex-1 border rounded px-1 py-0.5 text-xs"
+            />
+            <button
+              onClick={() => {
+                const m = { ...obj.metadata };
+                delete m[key];
+                update({ metadata: m });
+              }}
+              className="text-red-400 hover:text-red-600 text-xs px-1"
+              title="Remove"
+            >✕</button>
+          </div>
+        ))}
+        <MetadataAdder onAdd={(key, value) => update({ metadata: { ...obj.metadata, [key]: value } })} />
+      </div>
+
+      {/* ID */}
       <div className="border-t border-gray-200 pt-3 mt-3">
         <h4 className="text-xs font-semibold text-gray-500 mb-1">ID</h4>
         <p className="text-xs text-gray-400 font-mono break-all">{obj.id}</p>
       </div>
+    </div>
+  );
+}
+
+function MetadataAdder({ onAdd }: { onAdd: (key: string, value: string) => void }) {
+  const [key, setKey] = useState('');
+  const [value, setValue] = useState('');
+  return (
+    <div className="flex gap-1 mt-1">
+      <input
+        type="text"
+        placeholder="key"
+        value={key}
+        onChange={(e) => setKey(e.target.value)}
+        className="w-20 border rounded px-1 py-0.5 text-xs"
+      />
+      <input
+        type="text"
+        placeholder="value"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="flex-1 border rounded px-1 py-0.5 text-xs"
+      />
+      <button
+        onClick={() => { if (key.trim()) { onAdd(key.trim(), value); setKey(''); setValue(''); } }}
+        className="text-green-500 hover:text-green-700 text-xs px-1 font-bold"
+        title="Add"
+      >+</button>
     </div>
   );
 }

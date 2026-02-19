@@ -1,6 +1,6 @@
 'use client';
-import React, { useRef, useEffect, useCallback } from 'react';
-import { Stage, Layer, Rect, Transformer, Line } from 'react-konva';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
+import { Stage, Layer, Rect, Transformer, Line, Image as KonvaImage } from 'react-konva';
 import type Konva from 'konva';
 import { useEditorStore, type ToolType } from '@/store/editor-store';
 import GridLayer, { pxPerMeter } from './GridLayer';
@@ -36,11 +36,32 @@ export default function EditorCanvas() {
     activeTool, drawing, setDrawing, resetDrawing,
     objects, addObject, updateObject, createObject,
     selectedObjectIds, clearSelection, selectObjects, setSelectionBox, selectionBox,
-    snapToGrid, layers,
+    snapToGrid, layers, isSpacePanning,
+    backgroundImageUrl, backgroundOpacity,
   } = useEditorStore();
+
+  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
+
+  // F1: Load background image
+  useEffect(() => {
+    if (!backgroundImageUrl) { setBgImage(null); return; }
+    const img = new window.Image();
+    img.src = backgroundImageUrl;
+    img.onload = () => setBgImage(img);
+  }, [backgroundImageUrl]);
 
   const isPanning = useRef(false);
   const lastPointer = useRef({ x: 0, y: 0 });
+  const shiftHeld = useRef(false);
+
+  // Track shift key
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftHeld.current = true; };
+    const onKeyUp = (e: KeyboardEvent) => { if (e.key === 'Shift') shiftHeld.current = false; };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
+  }, []);
 
   // Resize
   useEffect(() => {
@@ -94,14 +115,12 @@ export default function EditorCanvas() {
   }, [panX, panY, zoom]);
 
   const handleMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-    // Middle-click pan
-    if (e.evt.button === 1) {
+    // Middle-click pan or space+drag pan (F6)
+    if (e.evt.button === 1 || (e.evt.button === 0 && isSpacePanning)) {
       isPanning.current = true;
       lastPointer.current = { x: e.evt.clientX, y: e.evt.clientY };
       return;
     }
-
-    // Space+drag pan handled by keydown
 
     if (e.evt.button !== 0) return;
 
@@ -136,7 +155,7 @@ export default function EditorCanvas() {
 
     // Rect, circle, line, dimension
     setDrawing({ isDrawing: true, startX: snapToGrid(pos.x), startY: snapToGrid(pos.y), currentX: snapToGrid(pos.x), currentY: snapToGrid(pos.y) });
-  }, [activeTool, drawing, getWorldPos, clearSelection, setDrawing, createObject, addObject, snapToGrid]);
+  }, [activeTool, drawing, getWorldPos, clearSelection, setDrawing, createObject, addObject, snapToGrid, isSpacePanning]);
 
   const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (isPanning.current) {
@@ -210,12 +229,19 @@ export default function EditorCanvas() {
       });
       addObject(obj);
     } else {
+      let finalW = w;
+      let finalH = h;
+      // F7: Shift-constrain circle to perfect circle
+      if (shape === 'circle' && shiftHeld.current) {
+        const maxDim = Math.max(w, h);
+        finalW = maxDim;
+        finalH = maxDim;
+      }
       const obj = createObject(shape, type, {
         x: Math.min(sx, ex),
         y: Math.min(sy, ey),
-        width: w,
-        height: h,
-        layer: shape === 'rect' ? 'booths' : 'furniture',
+        width: finalW,
+        height: finalH,
       });
       addObject(obj);
     }
@@ -309,7 +335,16 @@ export default function EditorCanvas() {
     );
   };
 
-  const sortedObjects = Array.from(objects.values()).sort((a, b) => a.z_index - b.z_index);
+  // F11: Filter objects by layer visibility
+  const sortedObjects = Array.from(objects.values())
+    .filter((obj) => {
+      const layerKey = obj.layer === 'default' ? 'annotations' : obj.layer;
+      const ls = layers[layerKey as keyof typeof layers];
+      return !ls || ls.visible;
+    })
+    .sort((a, b) => a.z_index - b.z_index);
+
+  const cursorStyle = isSpacePanning ? 'grab' : activeTool === 'select' ? 'default' : 'crosshair';
 
   return (
     <Stage
@@ -325,10 +360,19 @@ export default function EditorCanvas() {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onDblClick={handleDblClick}
-      style={{ background: '#f5f5f5', cursor: activeTool === 'select' ? 'default' : 'crosshair' }}
+      style={{ background: '#f5f5f5', cursor: cursorStyle }}
     >
       <Layer>
         <GridLayer />
+        {/* F1: Background image */}
+        {bgImage && (
+          <KonvaImage
+            image={bgImage}
+            opacity={backgroundOpacity}
+            listening={false}
+            name="background"
+          />
+        )}
         {sortedObjects.map((obj) => (
           <ShapeRenderer key={obj.id} obj={obj} />
         ))}

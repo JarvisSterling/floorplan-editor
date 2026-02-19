@@ -1,5 +1,5 @@
 'use client';
-import React from 'react';
+import React, { useRef } from 'react';
 import { useEditorStore, GRID_SIZES, type ToolType } from '@/store/editor-store';
 
 const tools: { id: ToolType; label: string; icon: string }[] = [
@@ -19,7 +19,10 @@ export default function Toolbar() {
     gridSize, setGridSize, gridVisible, toggleGrid, snapEnabled, toggleSnap,
     unit, setUnit, undo, redo, undoStack, redoStack,
     removeObjects, selectedObjectIds,
+    setBackgroundImage, backgroundOpacity, setBackgroundOpacity,
+    saveStatus,
   } = useEditorStore();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="h-12 bg-white border-b border-gray-200 flex items-center px-3 gap-1 shrink-0">
@@ -74,6 +77,51 @@ export default function Toolbar() {
         <option value="m">Meters</option>
         <option value="ft">Feet</option>
       </select>
+
+      {/* F1: Background Image Upload */}
+      <div className="flex items-center gap-1 border-l border-gray-200 pl-2 ml-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/svg+xml,image/jpeg,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => setBackgroundImage(reader.result as string);
+            reader.readAsDataURL(file);
+            e.target.value = '';
+          }}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="text-xs px-2 py-1 rounded hover:bg-gray-100"
+          title="Upload background blueprint (PNG, SVG, JPG)"
+        >🖼 BG</button>
+        <input
+          type="range" min="0" max="1" step="0.05"
+          value={backgroundOpacity}
+          onChange={(e) => setBackgroundOpacity(Number(e.target.value))}
+          className="w-16"
+          title={`Background opacity: ${Math.round(backgroundOpacity * 100)}%`}
+        />
+      </div>
+
+      {/* F2: Save Status Indicator */}
+      <div className="ml-auto flex items-center gap-1 text-xs">
+        <span className={`px-2 py-0.5 rounded ${
+          saveStatus === 'saved' ? 'text-green-600 bg-green-50' :
+          saveStatus === 'saving' ? 'text-blue-600 bg-blue-50' :
+          saveStatus === 'error' ? 'text-red-600 bg-red-50' :
+          'text-orange-600 bg-orange-50'
+        }`}>
+          {saveStatus === 'saved' ? '✓ Saved' :
+           saveStatus === 'saving' ? '⟳ Saving...' :
+           saveStatus === 'error' ? '✕ Error' :
+           '● Unsaved'}
+        </span>
+      </div>
     </div>
   );
 }
