@@ -350,7 +350,12 @@ export default function EditorCanvas() {
     e.preventDefault();
     const data = e.dataTransfer.getData('application/x-library-item');
     if (!data) return;
-    const item: LibraryItem = JSON.parse(data);
+    let item: LibraryItem;
+    try {
+      item = JSON.parse(data);
+    } catch {
+      return;
+    }
     const stage = stageRef.current;
     if (!stage) return;
     const container = stage.container().getBoundingClientRect();

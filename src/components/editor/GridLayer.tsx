@@ -3,7 +3,9 @@ import React, { useMemo } from 'react';
 import { Line, Group } from 'react-konva';
 import { useEditorStore } from '@/store/editor-store';
 
-const PIXELS_PER_METER = 50; // 1m = 50px at zoom=1
+import { PX_PER_METER } from '@/lib/constants';
+
+const PIXELS_PER_METER = PX_PER_METER;
 
 export const pxPerMeter = PIXELS_PER_METER;
 

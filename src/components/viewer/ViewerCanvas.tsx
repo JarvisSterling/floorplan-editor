@@ -102,7 +102,7 @@ export default function ViewerCanvas() {
   // Click on empty = deselect
   const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (e.target === e.target.getStage()) {
-      setSelectedObjectId(null as unknown as string);
+      setSelectedObjectId(null);
     }
   }, [setSelectedObjectId]);
 

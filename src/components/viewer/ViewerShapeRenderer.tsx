@@ -3,7 +3,9 @@ import React from 'react';
 import { Rect, Ellipse, Line, Text, Group } from 'react-konva';
 import type { FloorPlanObject } from '@/types/database';
 
-const pxPerMeter = 40;
+import { PX_PER_METER } from '@/lib/constants';
+
+const pxPerMeter = PX_PER_METER;
 
 interface Props {
   obj: FloorPlanObject;
