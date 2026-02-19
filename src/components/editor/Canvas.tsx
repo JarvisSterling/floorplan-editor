@@ -6,6 +6,7 @@ import { useEditorStore, type ToolType } from '@/store/editor-store';
 import GridLayer, { pxPerMeter } from './GridLayer';
 import ShapeRenderer from '../shapes/ShapeRenderer';
 import type { FloorPlanObject, ObjectType, ShapeType } from '@/types/database';
+import type { LibraryItem } from '@/lib/object-library';
 
 function toolToShapeType(tool: ToolType): ShapeType {
   switch (tool) {
@@ -344,9 +345,41 @@ export default function EditorCanvas() {
     })
     .sort((a, b) => a.z_index - b.z_index);
 
+  // Drop handler for object library drag-and-drop
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const data = e.dataTransfer.getData('application/x-library-item');
+    if (!data) return;
+    const item: LibraryItem = JSON.parse(data);
+    const stage = stageRef.current;
+    if (!stage) return;
+    const container = stage.container().getBoundingClientRect();
+    const pointerX = (e.clientX - container.left - panX) / zoom / pxPerMeter;
+    const pointerY = (e.clientY - container.top - panY) / zoom / pxPerMeter;
+    const x = snapToGrid(pointerX - item.widthM / 2);
+    const y = snapToGrid(pointerY - item.heightM / 2);
+    const obj = createObject(item.shapeType, item.objectType, {
+      x,
+      y,
+      width: item.widthM,
+      height: item.heightM,
+      label: item.name,
+      layer: item.defaultLayer,
+      style: { ...item.defaultStyle },
+      metadata: { ...item.metadata, libraryItemId: item.id },
+    });
+    addObject(obj);
+  }, [panX, panY, zoom, snapToGrid, createObject, addObject]);
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
   const cursorStyle = isSpacePanning ? 'grab' : activeTool === 'select' ? 'default' : 'crosshair';
 
   return (
+    <div onDrop={handleDrop} onDragOver={handleDragOver} style={{ width: '100%', height: '100%' }}>
     <Stage
       ref={stageRef}
       width={stageWidth}
@@ -388,5 +421,6 @@ export default function EditorCanvas() {
         />
       </Layer>
     </Stage>
+    </div>
   );
 }
