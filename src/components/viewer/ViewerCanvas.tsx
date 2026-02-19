@@ -60,6 +60,7 @@ export default function ViewerCanvas() {
 
   // Pan
   const handleMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    if (e.target !== e.target.getStage()) return;
     isPanning.current = true;
     lastPointer.current = { x: e.evt.clientX, y: e.evt.clientY };
   }, []);
