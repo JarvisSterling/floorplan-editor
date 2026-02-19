@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { Rect, Ellipse, Line, Text, Group, Circle } from 'react-konva';
+import { Rect, Ellipse, Line, Text, Group } from 'react-konva';
 import type { FloorPlanObject } from '@/types/database';
 import { useEditorStore } from '@/store/editor-store';
 import { pxPerMeter } from '../editor/GridLayer';
@@ -10,7 +10,7 @@ interface Props {
 }
 
 export default function ShapeRenderer({ obj }: Props) {
-  const { selectObject, updateObject, selectedObjectIds, layers, snapToGrid, activeTool } = useEditorStore();
+  const { selectObject, updateObject, selectedObjectIds, layers, snapToGrid, activeTool, booths, setContextMenu } = useEditorStore();
 
   const layerKey = obj.layer === 'default' ? 'annotations' : obj.layer;
   const layerState = layers[layerKey as keyof typeof layers];
@@ -18,6 +18,10 @@ export default function ShapeRenderer({ obj }: Props) {
 
   const isSelected = selectedObjectIds.has(obj.id);
   const style = obj.style as Record<string, any>;
+  const metadata = obj.metadata as Record<string, any>;
+  const booth = booths.get(obj.id);
+  const isBooth = obj.type === 'booth' || !!booth;
+
   const fill = style?.fill || '#4A90D9';
   const stroke = style?.stroke || '#333';
   const strokeWidth = style?.strokeWidth ?? 1;
@@ -41,6 +45,13 @@ export default function ShapeRenderer({ obj }: Props) {
     selectObject(obj.id, e.evt.shiftKey);
   };
 
+  const handleContextMenu = (e: any) => {
+    e.evt.preventDefault();
+    e.cancelBubble = true;
+    selectObject(obj.id, false);
+    setContextMenu({ x: e.evt.clientX, y: e.evt.clientY, objectId: obj.id });
+  };
+
   const common = {
     x: obj.x * pxPerMeter,
     y: obj.y * pxPerMeter,
@@ -49,10 +60,87 @@ export default function ShapeRenderer({ obj }: Props) {
     onClick: handleClick,
     onTap: handleClick,
     onDragEnd: handleDragEnd,
+    onContextMenu: handleContextMenu,
     opacity,
     name: obj.id,
     id: obj.id,
   };
+
+  // Booth label content
+  const boothNumber = metadata?.booth_number || booth?.booth_number || '';
+  const exhibitorName = metadata?.exhibitor_name || '';
+
+  // For booth shapes, render with a Group to overlay text
+  if (isBooth && obj.shape === 'rect' && obj.width && obj.height) {
+    const w = obj.width * pxPerMeter;
+    const h = obj.height * pxPerMeter;
+    const fontSize = Math.min(w, h) * 0.2;
+    const smallFontSize = fontSize * 0.6;
+
+    return (
+      <Group {...common}>
+        <Rect
+          width={w}
+          height={h}
+          fill={fill}
+          stroke={isSelected ? '#0066FF' : stroke}
+          strokeWidth={isSelected ? 2 : strokeWidth}
+          dash={dash}
+          cornerRadius={2}
+        />
+        {/* Booth number */}
+        {boothNumber && (
+          <Text
+            text={boothNumber}
+            x={0}
+            y={h * 0.25}
+            width={w}
+            align="center"
+            fontSize={Math.max(10, fontSize)}
+            fontStyle="bold"
+            fill="#FFFFFF"
+            shadowColor="#000000"
+            shadowBlur={2}
+            shadowOpacity={0.5}
+            listening={false}
+          />
+        )}
+        {/* Exhibitor name */}
+        {exhibitorName && (
+          <Text
+            text={exhibitorName}
+            x={2}
+            y={h * 0.55}
+            width={w - 4}
+            align="center"
+            fontSize={Math.max(8, smallFontSize)}
+            fill="#FFFFFF"
+            shadowColor="#000000"
+            shadowBlur={1}
+            shadowOpacity={0.5}
+            listening={false}
+            ellipsis
+            wrap="none"
+          />
+        )}
+        {/* Label if different from booth number */}
+        {obj.label && obj.label !== boothNumber && (
+          <Text
+            text={obj.label}
+            x={2}
+            y={h * 0.75}
+            width={w - 4}
+            align="center"
+            fontSize={Math.max(7, smallFontSize * 0.8)}
+            fill="rgba(255,255,255,0.8)"
+            listening={false}
+            ellipsis
+            wrap="none"
+          />
+        )}
+      </Group>
+    );
+  }
 
   switch (obj.shape) {
     case 'rect':
@@ -82,7 +170,7 @@ export default function ShapeRenderer({ obj }: Props) {
           offsetY={0}
         />
       );
-    case 'line':
+    case 'line': {
       const pts = obj.points ?? [{ x: 0, y: 0 }, { x: (obj.width ?? 2), y: 0 }];
       return (
         <Line
@@ -94,6 +182,7 @@ export default function ShapeRenderer({ obj }: Props) {
           lineCap="round"
         />
       );
+    }
     case 'polygon':
       if (!obj.points || obj.points.length < 3) return null;
       return (

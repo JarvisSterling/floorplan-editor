@@ -9,6 +9,7 @@ import Rulers from '@/components/editor/Rulers';
 import Minimap from '@/components/editor/Minimap';
 import useKeyboardShortcuts from '@/hooks/useKeyboardShortcuts';
 import useAutoSave from '@/hooks/useAutoSave';
+import ContextMenu from '@/components/editor/ContextMenu';
 
 const EditorCanvas = dynamic(() => import('@/components/editor/Canvas'), { ssr: false });
 
@@ -31,6 +32,7 @@ export default function EditorPage() {
         </div>
         <PropertiesPanel />
       </div>
+      <ContextMenu />
     </div>
   );
 }

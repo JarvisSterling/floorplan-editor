@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import type { FloorPlanObject, LayerType, ObjectType, ShapeType } from '@/types/database';
+import type { FloorPlanObject, LayerType, ObjectType, ShapeType, Booth, BoothProfile, BoothStatus } from '@/types/database';
+import { generateBoothNumber, BOOTH_STATUS_COLORS, BOOTH_STATUS_BORDER } from '@/lib/booth-helpers';
 
 export type ToolType = 'select' | 'rect' | 'circle' | 'polygon' | 'line' | 'text' | 'dimension';
 export type UnitType = 'm' | 'ft';
@@ -134,6 +135,22 @@ interface EditorState {
   // Actions - Select all (F5)
   selectAll: () => void;
 
+  // Booths
+  booths: Map<string, Booth>;       // keyed by object_id
+  boothProfiles: Map<string, BoothProfile>; // keyed by booth_id
+  contextMenu: { x: number; y: number; objectId: string } | null;
+
+  setContextMenu: (menu: { x: number; y: number; objectId: string } | null) => void;
+  convertToBooth: (objectId: string, eventId?: string) => Promise<void>;
+  updateBoothStatus: (objectId: string, status: BoothStatus) => void;
+  updateBoothNumber: (objectId: string, number: string) => void;
+  updateBoothExhibitor: (objectId: string, exhibitorId: string | null, exhibitorName?: string) => void;
+  updateBoothProfile: (objectId: string, profile: Partial<BoothProfile>) => void;
+  removeBooth: (objectId: string) => Promise<void>;
+  loadBooths: (eventId: string) => Promise<void>;
+  setBooth: (objectId: string, booth: Booth) => void;
+  setBoothProfile: (boothId: string, profile: BoothProfile) => void;
+
   // Helpers
   snapToGrid: (val: number) => number;
   getSelectedObjects: () => FloorPlanObject[];
@@ -175,6 +192,196 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   isDirty: false,
   isSpacePanning: false,
   previousTool: null,
+  booths: new Map(),
+  boothProfiles: new Map(),
+  contextMenu: null,
+
+  setContextMenu: (menu) => set({ contextMenu: menu }),
+
+  convertToBooth: async (objectId, eventId = 'demo') => {
+    const { objects, booths, updateObject } = get();
+    const obj = objects.get(objectId);
+    if (!obj) return;
+    if (booths.has(objectId)) return; // already a booth
+
+    const existingNumbers = Array.from(booths.values()).map((b) => b.booth_number);
+    const boothNumber = generateBoothNumber(existingNumbers);
+    const sizeSqm = (obj.width ?? 1) * (obj.height ?? 1);
+
+    // Update object to booth type with status colors
+    updateObject(objectId, {
+      type: 'booth',
+      layer: 'booths',
+      style: { ...obj.style as Record<string, unknown>, fill: BOOTH_STATUS_COLORS.available, stroke: BOOTH_STATUS_BORDER.available, strokeWidth: 2 },
+      metadata: { ...obj.metadata, booth_number: boothNumber, booth_status: 'available' as BoothStatus },
+    });
+
+    // Create booth in API
+    try {
+      const res = await fetch('/api/booths', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          object_id: objectId,
+          event_id: eventId,
+          booth_number: boothNumber,
+          status: 'available',
+          category: (obj.metadata as Record<string, unknown>)?.boothCategory || 'standard',
+          size_sqm: sizeSqm,
+          amenities: [],
+        }),
+      });
+      if (res.ok) {
+        const booth = await res.json() as Booth;
+        set((s) => {
+          const m = new Map(s.booths);
+          m.set(objectId, booth);
+          return { booths: m };
+        });
+      }
+    } catch {
+      // Offline fallback — store locally
+      const localBooth: Booth = {
+        id: uuidv4(), object_id: objectId, event_id: eventId,
+        booth_number: boothNumber, status: 'available', category: 'standard',
+        size_sqm: sizeSqm, price: null, pricing_tier: null,
+        exhibitor_id: null, max_capacity: null, amenities: [],
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      };
+      set((s) => {
+        const m = new Map(s.booths);
+        m.set(objectId, localBooth);
+        return { booths: m };
+      });
+    }
+  },
+
+  updateBoothStatus: (objectId, status) => {
+    const { booths, updateObject, objects } = get();
+    const booth = booths.get(objectId);
+    const obj = objects.get(objectId);
+    if (!booth || !obj) return;
+
+    const updated = { ...booth, status, updated_at: new Date().toISOString() };
+    set((s) => { const m = new Map(s.booths); m.set(objectId, updated); return { booths: m }; });
+
+    updateObject(objectId, {
+      style: { ...obj.style as Record<string, unknown>, fill: BOOTH_STATUS_COLORS[status], stroke: BOOTH_STATUS_BORDER[status] },
+      metadata: { ...obj.metadata, booth_status: status },
+    });
+
+    // Sync to API
+    fetch(`/api/booths/${booth.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    }).catch(() => {});
+  },
+
+  updateBoothNumber: (objectId, number) => {
+    const { booths, updateObject, objects } = get();
+    const booth = booths.get(objectId);
+    const obj = objects.get(objectId);
+    if (!booth || !obj) return;
+
+    const updated = { ...booth, booth_number: number, updated_at: new Date().toISOString() };
+    set((s) => { const m = new Map(s.booths); m.set(objectId, updated); return { booths: m }; });
+    updateObject(objectId, { metadata: { ...obj.metadata, booth_number: number } });
+
+    fetch(`/api/booths/${booth.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ booth_number: number }),
+    }).catch(() => {});
+  },
+
+  updateBoothExhibitor: (objectId, exhibitorId, exhibitorName) => {
+    const { booths, updateObject, objects } = get();
+    const booth = booths.get(objectId);
+    const obj = objects.get(objectId);
+    if (!booth || !obj) return;
+
+    const updated = { ...booth, exhibitor_id: exhibitorId, updated_at: new Date().toISOString() };
+    set((s) => { const m = new Map(s.booths); m.set(objectId, updated); return { booths: m }; });
+    updateObject(objectId, { metadata: { ...obj.metadata, exhibitor_id: exhibitorId, exhibitor_name: exhibitorName || '' } });
+
+    fetch(`/api/booths/${booth.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exhibitor_id: exhibitorId }),
+    }).catch(() => {});
+  },
+
+  updateBoothProfile: (objectId, profileUpdates) => {
+    const { booths, boothProfiles } = get();
+    const booth = booths.get(objectId);
+    if (!booth) return;
+
+    const existing = boothProfiles.get(booth.id);
+    if (existing) {
+      const updated = { ...existing, ...profileUpdates, updated_at: new Date().toISOString() };
+      set((s) => { const m = new Map(s.boothProfiles); m.set(booth.id, updated as BoothProfile); return { boothProfiles: m }; });
+    }
+
+    fetch(`/api/booths/${booth.id}/profile`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profileUpdates),
+    }).catch(() => {});
+  },
+
+  removeBooth: async (objectId) => {
+    const { booths, boothProfiles, updateObject, objects } = get();
+    const booth = booths.get(objectId);
+    const obj = objects.get(objectId);
+    if (!booth) return;
+
+    // Revert object to furniture
+    if (obj) {
+      updateObject(objectId, {
+        type: 'furniture',
+        layer: 'furniture',
+        style: { fill: '#4A90D9', stroke: '#333333', strokeWidth: 1, opacity: 1 },
+        metadata: {},
+      });
+    }
+
+    set((s) => {
+      const bm = new Map(s.booths); bm.delete(objectId);
+      const pm = new Map(s.boothProfiles); pm.delete(booth.id);
+      return { booths: bm, boothProfiles: pm };
+    });
+
+    try {
+      await fetch(`/api/booths/${booth.id}`, { method: 'DELETE' });
+    } catch {}
+  },
+
+  loadBooths: async (eventId) => {
+    try {
+      const res = await fetch(`/api/booths?event_id=${eventId}`);
+      if (!res.ok) return;
+      const data = await res.json() as Array<Booth & { booth_profiles?: BoothProfile[] }>;
+      const bm = new Map<string, Booth>();
+      const pm = new Map<string, BoothProfile>();
+      for (const item of data) {
+        const { booth_profiles, ...booth } = item;
+        bm.set(booth.object_id, booth);
+        if (booth_profiles && booth_profiles.length > 0) {
+          pm.set(booth.id, booth_profiles[0]);
+        }
+      }
+      set({ booths: bm, boothProfiles: pm });
+    } catch {}
+  },
+
+  setBooth: (objectId, booth) => set((s) => {
+    const m = new Map(s.booths); m.set(objectId, booth); return { booths: m };
+  }),
+
+  setBoothProfile: (boothId, profile) => set((s) => {
+    const m = new Map(s.boothProfiles); m.set(boothId, profile); return { boothProfiles: m };
+  }),
 
   setZoom: (zoom, centerX, centerY) => {
     const clamped = Math.min(5, Math.max(0.1, zoom));
