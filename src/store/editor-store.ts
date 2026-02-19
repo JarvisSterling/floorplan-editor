@@ -151,6 +151,10 @@ interface EditorState {
   setBooth: (objectId: string, booth: Booth) => void;
   setBoothProfile: (boothId: string, profile: BoothProfile) => void;
 
+  // Sync error
+  syncError: string | null;
+  clearSyncError: () => void;
+
   // Helpers
   snapToGrid: (val: number) => number;
   getSelectedObjects: () => FloorPlanObject[];
@@ -195,7 +199,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   booths: new Map(),
   boothProfiles: new Map(),
   contextMenu: null,
+  syncError: null,
 
+  clearSyncError: () => set({ syncError: null }),
   setContextMenu: (menu) => set({ contextMenu: menu }),
 
   convertToBooth: async (objectId, eventId = 'demo') => {
@@ -208,12 +214,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const boothNumber = generateBoothNumber(existingNumbers);
     const sizeSqm = (obj.width ?? 1) * (obj.height ?? 1);
 
-    // Update object to booth type with status colors
+    // Save original style before converting, then update to booth type
+    const originalStyle = { ...obj.style as Record<string, unknown> };
+    const originalType = obj.type;
+    const originalLayer = obj.layer;
     updateObject(objectId, {
       type: 'booth',
       layer: 'booths',
       style: { ...obj.style as Record<string, unknown>, fill: BOOTH_STATUS_COLORS.available, stroke: BOOTH_STATUS_BORDER.available, strokeWidth: 2 },
-      metadata: { ...obj.metadata, booth_number: boothNumber, booth_status: 'available' as BoothStatus },
+      metadata: { ...obj.metadata, booth_number: boothNumber, booth_status: 'available' as BoothStatus, _originalStyle: originalStyle, _originalType: originalType, _originalLayer: originalLayer },
     });
 
     // Create booth in API
@@ -270,12 +279,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       metadata: { ...obj.metadata, booth_status: status },
     });
 
-    // Sync to API
+    // Sync to API — revert on failure
+    const prevBooth = booth;
+    const prevStyle = obj.style;
+    const prevMetadata = obj.metadata;
     fetch(`/api/booths/${booth.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
-    }).catch(() => {});
+    }).then((res) => {
+      if (!res.ok) throw new Error(`Booth status sync failed: ${res.status}`);
+    }).catch((err) => {
+      console.error('updateBoothStatus sync error:', err);
+      set((s) => { const m = new Map(s.booths); m.set(objectId, prevBooth); return { booths: m, syncError: `Failed to sync booth status: ${err.message}` }; });
+      get().updateObject(objectId, { style: prevStyle, metadata: prevMetadata });
+    });
   },
 
   updateBoothNumber: (objectId, number) => {
@@ -284,6 +302,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const obj = objects.get(objectId);
     if (!booth || !obj) return;
 
+    const prevBooth = booth;
+    const prevMetadata = obj.metadata;
     const updated = { ...booth, booth_number: number, updated_at: new Date().toISOString() };
     set((s) => { const m = new Map(s.booths); m.set(objectId, updated); return { booths: m }; });
     updateObject(objectId, { metadata: { ...obj.metadata, booth_number: number } });
@@ -292,7 +312,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ booth_number: number }),
-    }).catch(() => {});
+    }).then((res) => {
+      if (!res.ok) throw new Error(`Booth number sync failed: ${res.status}`);
+    }).catch((err) => {
+      console.error('updateBoothNumber sync error:', err);
+      set((s) => { const m = new Map(s.booths); m.set(objectId, prevBooth); return { booths: m, syncError: `Failed to sync booth number: ${err.message}` }; });
+      get().updateObject(objectId, { metadata: prevMetadata });
+    });
   },
 
   updateBoothExhibitor: (objectId, exhibitorId, exhibitorName) => {
@@ -301,6 +327,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const obj = objects.get(objectId);
     if (!booth || !obj) return;
 
+    const prevBooth = booth;
+    const prevMetadata = obj.metadata;
     const updated = { ...booth, exhibitor_id: exhibitorId, updated_at: new Date().toISOString() };
     set((s) => { const m = new Map(s.booths); m.set(objectId, updated); return { booths: m }; });
     updateObject(objectId, { metadata: { ...obj.metadata, exhibitor_id: exhibitorId, exhibitor_name: exhibitorName || '' } });
@@ -309,7 +337,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ exhibitor_id: exhibitorId }),
-    }).catch(() => {});
+    }).then((res) => {
+      if (!res.ok) throw new Error(`Booth exhibitor sync failed: ${res.status}`);
+    }).catch((err) => {
+      console.error('updateBoothExhibitor sync error:', err);
+      set((s) => { const m = new Map(s.booths); m.set(objectId, prevBooth); return { booths: m, syncError: `Failed to sync exhibitor: ${err.message}` }; });
+      get().updateObject(objectId, { metadata: prevMetadata });
+    });
   },
 
   updateBoothProfile: (objectId, profileUpdates) => {
@@ -336,13 +370,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const obj = objects.get(objectId);
     if (!booth) return;
 
-    // Revert object to furniture
+    // Revert object to original style (or default furniture style)
     if (obj) {
+      const meta = obj.metadata as Record<string, unknown>;
+      const restoredStyle = (meta?._originalStyle as Record<string, unknown>) || { fill: '#4A90D9', stroke: '#333333', strokeWidth: 1, opacity: 1 };
+      const restoredType = (meta?._originalType as string) || 'furniture';
+      const restoredLayer = (meta?._originalLayer as string) || 'furniture';
+      // Remove booth-specific metadata keys
+      const cleanMeta = { ...meta };
+      delete cleanMeta.booth_number;
+      delete cleanMeta.booth_status;
+      delete cleanMeta.exhibitor_id;
+      delete cleanMeta.exhibitor_name;
+      delete cleanMeta._originalStyle;
+      delete cleanMeta._originalType;
+      delete cleanMeta._originalLayer;
       updateObject(objectId, {
-        type: 'furniture',
-        layer: 'furniture',
-        style: { fill: '#4A90D9', stroke: '#333333', strokeWidth: 1, opacity: 1 },
-        metadata: {},
+        type: restoredType as FloorPlanObject['type'],
+        layer: restoredLayer as FloorPlanObject['layer'],
+        style: restoredStyle,
+        metadata: cleanMeta,
       });
     }
 

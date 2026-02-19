@@ -256,6 +256,39 @@ export default function PropertiesPanel() {
             </div>
           </div>
 
+          {/* Pricing Tier */}
+          <div className="mb-2">
+            <label className="block text-gray-500 mb-1">Pricing Tier</label>
+            <select
+              value={booth?.pricing_tier || ''}
+              onChange={(e) => {
+                const tier = e.target.value || null;
+                if (booth) {
+                  // Update local booth state
+                  const { booths } = useEditorStore.getState();
+                  const updated = { ...booth, pricing_tier: tier, updated_at: new Date().toISOString() };
+                  useEditorStore.setState((s) => {
+                    const m = new Map(s.booths);
+                    m.set(id, updated);
+                    return { booths: m };
+                  });
+                  // Sync to API
+                  fetch(`/api/booths/${booth.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pricing_tier: tier }),
+                  }).catch((err) => console.error('Pricing tier sync error:', err));
+                }
+              }}
+              className="w-full border rounded px-2 py-1"
+            >
+              <option value="">— None —</option>
+              <option value="standard">Standard</option>
+              <option value="premium">Premium</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+          </div>
+
           {/* Exhibitor */}
           <div className="mb-2">
             <label className="block text-gray-500 mb-1">Exhibitor ID</label>

@@ -156,12 +156,63 @@ export default function ShapeRenderer({ obj }: Props) {
           cornerRadius={2}
         />
       );
-    case 'circle':
+    case 'circle': {
+      const rx = ((obj.width ?? 1) / 2) * pxPerMeter;
+      const ry = ((obj.height ?? obj.width ?? 1) / 2) * pxPerMeter;
+      if (isBooth) {
+        const cFontSize = Math.min(rx, ry) * 0.4;
+        const cSmallFont = cFontSize * 0.6;
+        return (
+          <Group {...common}>
+            <Ellipse
+              radiusX={rx}
+              radiusY={ry}
+              fill={fill}
+              stroke={isSelected ? '#0066FF' : stroke}
+              strokeWidth={isSelected ? 2 : strokeWidth}
+              dash={dash}
+            />
+            {boothNumber && (
+              <Text
+                text={boothNumber}
+                x={-rx}
+                y={-cFontSize * 0.7}
+                width={rx * 2}
+                align="center"
+                fontSize={Math.max(10, cFontSize)}
+                fontStyle="bold"
+                fill="#FFFFFF"
+                shadowColor="#000000"
+                shadowBlur={2}
+                shadowOpacity={0.5}
+                listening={false}
+              />
+            )}
+            {exhibitorName && (
+              <Text
+                text={exhibitorName}
+                x={-rx + 2}
+                y={cFontSize * 0.3}
+                width={rx * 2 - 4}
+                align="center"
+                fontSize={Math.max(8, cSmallFont)}
+                fill="#FFFFFF"
+                shadowColor="#000000"
+                shadowBlur={1}
+                shadowOpacity={0.5}
+                listening={false}
+                ellipsis
+                wrap="none"
+              />
+            )}
+          </Group>
+        );
+      }
       return (
         <Ellipse
           {...common}
-          radiusX={((obj.width ?? 1) / 2) * pxPerMeter}
-          radiusY={((obj.height ?? obj.width ?? 1) / 2) * pxPerMeter}
+          radiusX={rx}
+          radiusY={ry}
           fill={fill}
           stroke={isSelected ? '#0066FF' : stroke}
           strokeWidth={isSelected ? 2 : strokeWidth}
@@ -170,6 +221,7 @@ export default function ShapeRenderer({ obj }: Props) {
           offsetY={0}
         />
       );
+    }
     case 'line': {
       const pts = obj.points ?? [{ x: 0, y: 0 }, { x: (obj.width ?? 2), y: 0 }];
       return (
@@ -183,12 +235,64 @@ export default function ShapeRenderer({ obj }: Props) {
         />
       );
     }
-    case 'polygon':
+    case 'polygon': {
       if (!obj.points || obj.points.length < 3) return null;
+      const polyPts = obj.points.flatMap((p) => [p.x * pxPerMeter, p.y * pxPerMeter]);
+      if (isBooth) {
+        // Compute centroid
+        const cx = obj.points.reduce((s, p) => s + p.x, 0) / obj.points.length * pxPerMeter;
+        const cy = obj.points.reduce((s, p) => s + p.y, 0) / obj.points.length * pxPerMeter;
+        const pFontSize = 12;
+        return (
+          <Group {...common}>
+            <Line
+              points={polyPts}
+              fill={fill}
+              stroke={isSelected ? '#0066FF' : stroke}
+              strokeWidth={isSelected ? 2 : strokeWidth}
+              closed
+              dash={dash}
+            />
+            {boothNumber && (
+              <Text
+                text={boothNumber}
+                x={cx - 40}
+                y={cy - pFontSize}
+                width={80}
+                align="center"
+                fontSize={pFontSize}
+                fontStyle="bold"
+                fill="#FFFFFF"
+                shadowColor="#000000"
+                shadowBlur={2}
+                shadowOpacity={0.5}
+                listening={false}
+              />
+            )}
+            {exhibitorName && (
+              <Text
+                text={exhibitorName}
+                x={cx - 40}
+                y={cy + 2}
+                width={80}
+                align="center"
+                fontSize={Math.max(8, pFontSize * 0.7)}
+                fill="#FFFFFF"
+                shadowColor="#000000"
+                shadowBlur={1}
+                shadowOpacity={0.5}
+                listening={false}
+                ellipsis
+                wrap="none"
+              />
+            )}
+          </Group>
+        );
+      }
       return (
         <Line
           {...common}
-          points={obj.points.flatMap((p) => [p.x * pxPerMeter, p.y * pxPerMeter])}
+          points={polyPts}
           fill={fill}
           stroke={isSelected ? '#0066FF' : stroke}
           strokeWidth={isSelected ? 2 : strokeWidth}
@@ -196,6 +300,7 @@ export default function ShapeRenderer({ obj }: Props) {
           dash={dash}
         />
       );
+    }
     case 'text':
       return (
         <Text
