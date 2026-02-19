@@ -191,7 +191,28 @@ export interface FloorPlanTemplate {
   created_at: string;
 }
 
+export type BoothRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface BoothRequest {
+  id: string;
+  booth_id: string;
+  requester_name: string;
+  company: string;
+  email: string;
+  message: string | null;
+  status: BoothRequestStatus;
+  created_at: string;
+}
+
 // API response types
 export interface FloorPlanWithObjects extends FloorPlan {
   floor_plan_objects: FloorPlanObject[];
+}
+
+export interface BoothWithProfile extends Booth {
+  booth_profiles: BoothProfile[] | null;
+}
+
+export interface MarketplaceBooth extends BoothWithProfile {
+  floor_plan_object?: FloorPlanObject;
 }

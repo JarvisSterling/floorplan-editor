@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useEditorStore } from '@/store/editor-store';
 import type { FloorPlanObject, LayerType, ObjectType, BoothStatus } from '@/types/database';
 import { BOOTH_STATUS_COLORS, BOOTH_STATUS_LABELS } from '@/lib/booth-helpers';
+import CrossFloorLinkPanel from './CrossFloorLinkPanel';
 
 const CATEGORIES: ObjectType[] = ['booth', 'wall', 'zone', 'furniture', 'infrastructure', 'annotation'];
 const LAYER_OPTIONS: LayerType[] = ['background', 'structure', 'booths', 'zones', 'furniture', 'annotations', 'default'];
@@ -374,6 +375,9 @@ export default function PropertiesPanel() {
         ))}
         <MetadataAdder onAdd={(key, value) => update({ metadata: { ...obj.metadata, [key]: value } })} />
       </div>
+
+      {/* Cross-Floor Link */}
+      <CrossFloorLinkPanel />
 
       {/* ID */}
       <div className="border-t border-gray-200 pt-3 mt-3">

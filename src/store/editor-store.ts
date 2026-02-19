@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import type { FloorPlanObject, LayerType, ObjectType, ShapeType, Booth, BoothProfile, BoothStatus } from '@/types/database';
+import type { FloorPlan, FloorPlanObject, LayerType, ObjectType, ShapeType, Booth, BoothProfile, BoothStatus } from '@/types/database';
 import { generateBoothNumber, BOOTH_STATUS_COLORS, BOOTH_STATUS_BORDER } from '@/lib/booth-helpers';
 
 export type ToolType = 'select' | 'rect' | 'circle' | 'polygon' | 'line' | 'text' | 'dimension';
@@ -151,6 +151,19 @@ interface EditorState {
   setBooth: (objectId: string, booth: Booth) => void;
   setBoothProfile: (boothId: string, profile: BoothProfile) => void;
 
+  // Multi-floor
+  floors: FloorPlan[];
+  currentFloorId: string | null;
+  eventId: string;
+  loadFloors: (eventId: string) => Promise<void>;
+  switchFloor: (floorId: string) => Promise<void>;
+  addFloor: (floor: Partial<FloorPlan>) => Promise<FloorPlan | null>;
+  deleteFloor: (floorId: string) => Promise<void>;
+  duplicateFloor: (floorId: string) => Promise<FloorPlan | null>;
+  updateFloor: (floorId: string, updates: Partial<FloorPlan>) => Promise<void>;
+  reorderFloors: (floorIds: string[]) => Promise<void>;
+  setFloors: (floors: FloorPlan[]) => void;
+
   // Sync error
   syncError: string | null;
   clearSyncError: () => void;
@@ -200,6 +213,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   boothProfiles: new Map(),
   contextMenu: null,
   syncError: null,
+  floors: [],
+  currentFloorId: null,
+  eventId: 'demo',
 
   clearSyncError: () => set({ syncError: null }),
   setContextMenu: (menu) => set({ contextMenu: menu }),
@@ -429,6 +445,158 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setBoothProfile: (boothId, profile) => set((s) => {
     const m = new Map(s.boothProfiles); m.set(boothId, profile); return { boothProfiles: m };
   }),
+
+  // Multi-floor actions
+  loadFloors: async (eventId) => {
+    try {
+      const res = await fetch(`/api/floor-plans?event_id=${eventId}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as FloorPlan[];
+      const sorted = data.sort((a, b) => a.sort_order - b.sort_order);
+      set({ floors: sorted, eventId });
+      // If no current floor selected, select first
+      const { currentFloorId } = get();
+      if (!currentFloorId && sorted.length > 0) {
+        await get().switchFloor(sorted[0].id);
+      }
+    } catch {
+      console.error('Failed to load floors');
+    }
+  },
+
+  switchFloor: async (floorId) => {
+    // Save current floor objects first if dirty
+    const { isDirty, floorPlanId, objects } = get();
+    if (isDirty && floorPlanId !== 'demo') {
+      try {
+        await fetch(`/api/floor-plans/${floorPlanId}/objects/bulk`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ objects: Array.from(objects.values()) }),
+        });
+      } catch { /* best effort */ }
+    }
+
+    // Load new floor's objects
+    try {
+      const res = await fetch(`/api/floor-plans/${floorId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const objs = (data.floor_plan_objects || []) as FloorPlanObject[];
+      const m = new Map<string, FloorPlanObject>();
+      objs.forEach((o) => m.set(o.id, o));
+      set({
+        currentFloorId: floorId,
+        floorPlanId: floorId,
+        objects: m,
+        selectedObjectIds: new Set(),
+        undoStack: [],
+        redoStack: [],
+        isDirty: false,
+        saveStatus: 'saved',
+        backgroundImageUrl: data.background_image_url || null,
+        gridSize: data.grid_size_m || 1,
+      });
+    } catch {
+      console.error('Failed to switch floor');
+    }
+  },
+
+  addFloor: async (floorData) => {
+    const { eventId, floors } = get();
+    const maxSort = floors.reduce((max, f) => Math.max(max, f.sort_order), -1);
+    const maxFloorNum = floors.reduce((max, f) => Math.max(max, f.floor_number), 0);
+    const payload = {
+      event_id: eventId,
+      name: `Floor ${maxFloorNum + 1}`,
+      floor_number: maxFloorNum + 1,
+      width_m: 100,
+      height_m: 100,
+      grid_size_m: 1,
+      scale_px_per_m: 10,
+      metadata: {},
+      sort_order: maxSort + 1,
+      is_published: false,
+      ...floorData,
+    };
+    try {
+      const res = await fetch('/api/floor-plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) return null;
+      const newFloor = (await res.json()) as FloorPlan;
+      set((s) => ({ floors: [...s.floors, newFloor] }));
+      return newFloor;
+    } catch {
+      return null;
+    }
+  },
+
+  deleteFloor: async (floorId) => {
+    try {
+      const res = await fetch(`/api/floor-plans/${floorId}`, { method: 'DELETE' });
+      if (!res.ok) return;
+      const { currentFloorId, floors } = get();
+      const remaining = floors.filter((f) => f.id !== floorId);
+      set({ floors: remaining });
+      if (currentFloorId === floorId && remaining.length > 0) {
+        await get().switchFloor(remaining[0].id);
+      } else if (remaining.length === 0) {
+        set({ currentFloorId: null, objects: new Map(), floorPlanId: 'demo' });
+      }
+    } catch { /* ignore */ }
+  },
+
+  duplicateFloor: async (floorId) => {
+    try {
+      const res = await fetch(`/api/floor-plans/${floorId}/duplicate`, { method: 'POST' });
+      if (!res.ok) return null;
+      const newFloor = (await res.json()) as FloorPlan;
+      set((s) => ({ floors: [...s.floors, newFloor] }));
+      return newFloor;
+    } catch {
+      return null;
+    }
+  },
+
+  updateFloor: async (floorId, updates) => {
+    try {
+      const res = await fetch(`/api/floor-plans/${floorId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) return;
+      const updated = (await res.json()) as FloorPlan;
+      set((s) => ({
+        floors: s.floors.map((f) => (f.id === floorId ? updated : f)),
+      }));
+    } catch { /* ignore */ }
+  },
+
+  reorderFloors: async (floorIds) => {
+    // Optimistic update
+    const { floors } = get();
+    const reordered = floorIds
+      .map((id, i) => {
+        const f = floors.find((fl) => fl.id === id);
+        return f ? { ...f, sort_order: i } : null;
+      })
+      .filter(Boolean) as FloorPlan[];
+    set({ floors: reordered });
+
+    try {
+      await fetch('/api/floor-plans/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ floor_ids: floorIds }),
+      });
+    } catch { /* revert could be added */ }
+  },
+
+  setFloors: (floors) => set({ floors }),
 
   setZoom: (zoom, centerX, centerY) => {
     const clamped = Math.min(5, Math.max(0.1, zoom));

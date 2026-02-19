@@ -26,6 +26,13 @@ export const updateBoothSchema = z.object({
   amenities: z.array(z.string()).optional(),
 });
 
+export const boothRequestSchema = z.object({
+  requester_name: z.string().min(1, 'Name is required'),
+  company: z.string().min(1, 'Company is required'),
+  email: z.string().email('Valid email required'),
+  message: z.string().nullable().optional(),
+});
+
 export const updateBoothProfileSchema = z.object({
   company_name: z.string().nullable().optional(),
   logo_url: z.string().url().nullable().optional(),
