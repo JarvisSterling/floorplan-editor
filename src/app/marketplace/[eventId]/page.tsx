@@ -15,7 +15,19 @@ interface Props {
 
 export default function MarketplacePage({ params }: Props) {
   const { eventId } = use(params);
-  const { loading, error, setData, setLoading, setError, selectedBoothId, setSelectedBoothId, booths } = useMarketplaceStore();
+  const { 
+    loading, 
+    error, 
+    setData, 
+    setLoading, 
+    setError, 
+    selectedBoothId, 
+    setSelectedBoothId, 
+    booths,
+    floorPlans,
+    selectedFloorPlanIndex,
+    setSelectedFloorPlan
+  } = useMarketplaceStore();
 
   useEffect(() => {
     setLoading(true);
@@ -25,10 +37,9 @@ export default function MarketplacePage({ params }: Props) {
         return res.json() as Promise<{ floorPlans: FloorPlanWithObjects[]; booths: MarketplaceBooth[] }>;
       })
       .then((data) => {
-        const fp = data.floorPlans[0];
-        if (!fp) throw new Error('No floor plan found');
+        if (data.floorPlans.length === 0) throw new Error('No floor plans found');
 
-        // Map booth object_ids to floor plan objects
+        // Map booth object_ids to floor plan objects for all floor plans
         const objMap = new Map<string, FloorPlanObject>();
         for (const plan of data.floorPlans) {
           for (const obj of plan.floor_plan_objects || []) {
@@ -40,10 +51,18 @@ export default function MarketplacePage({ params }: Props) {
           floor_plan_object: objMap.get(b.object_id),
         }));
 
-        setData(fp, fp.floor_plan_objects || [], boothsWithObj);
+        const firstPlan = data.floorPlans[0];
+        setData(data.floorPlans, firstPlan.floor_plan_objects || [], boothsWithObj);
       })
       .catch((err) => setError(err.message));
   }, [eventId, setData, setLoading, setError]);
+
+  const handleFloorPlanChange = (index: number) => {
+    if (index >= 0 && index < floorPlans.length) {
+      const selectedPlan = floorPlans[index];
+      setSelectedFloorPlan(index, selectedPlan.floor_plan_objects || []);
+    }
+  };
 
   const selectedBooth = selectedBoothId ? booths.find((b) => b.id === selectedBoothId) ?? null : null;
 
@@ -77,6 +96,24 @@ export default function MarketplacePage({ params }: Props) {
           <span className="text-lg">🏪</span>
           <h1 className="text-base font-semibold text-gray-900">Booth Marketplace</h1>
         </div>
+        
+        {floorPlans.length > 1 && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="floor-select" className="text-sm text-gray-600">Floor:</label>
+            <select
+              id="floor-select"
+              value={selectedFloorPlanIndex}
+              onChange={(e) => handleFloorPlanChange(Number(e.target.value))}
+              className="border border-gray-300 rounded px-2 py-1 text-sm bg-white"
+            >
+              {floorPlans.map((plan, index) => (
+                <option key={plan.id} value={index}>
+                  {plan.name} (Floor {plan.floor_number})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </header>
 
       <div className="flex flex-1 overflow-hidden">

@@ -1,23 +1,27 @@
 'use client';
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useEditorStore } from '@/store/editor-store';
 import type { FloorPlan } from '@/types/database';
 
 function FloorItem({
   floor,
   isActive,
+  isDefault,
   onSelect,
   onDelete,
   onDuplicate,
   onRename,
+  onSetDefault,
   dragHandlers,
 }: {
   floor: FloorPlan;
   isActive: boolean;
+  isDefault: boolean;
   onSelect: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
   onRename: (name: string) => void;
+  onSetDefault: () => void;
   dragHandlers: {
     onDragStart: (e: React.DragEvent) => void;
     onDragOver: (e: React.DragEvent) => void;
@@ -69,8 +73,13 @@ function FloorItem({
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <div className="text-xs font-medium text-gray-800 truncate">
-            {floor.name}
+          <div className="flex items-center gap-1">
+            <div className="text-xs font-medium text-gray-800 truncate">
+              {floor.name}
+            </div>
+            {isDefault && (
+              <span className="text-yellow-500 text-xs" title="Default floor">★</span>
+            )}
           </div>
         )}
         <div className="text-[10px] text-gray-400">
@@ -104,6 +113,16 @@ function FloorItem({
             >
               📋 Duplicate
             </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onSetDefault(); setShowMenu(false); }}
+              className={`w-full text-left px-3 py-1.5 text-xs ${
+                isDefault 
+                  ? 'text-yellow-600 bg-yellow-50' 
+                  : 'hover:bg-gray-50'
+              }`}
+            >
+              {isDefault ? '★ Default' : '☆ Set as default'}
+            </button>
             <hr className="my-1 border-gray-100" />
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); setShowMenu(false); }}
@@ -121,7 +140,7 @@ function FloorItem({
 export default function FloorPanel() {
   const {
     floors, currentFloorId, switchFloor, addFloor, deleteFloor,
-    duplicateFloor, updateFloor, reorderFloors,
+    duplicateFloor, updateFloor, reorderFloors, setDefaultFloor,
   } = useEditorStore();
 
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -149,6 +168,14 @@ export default function FloorPanel() {
   const handleRename = useCallback(async (floorId: string, name: string) => {
     await updateFloor(floorId, { name });
   }, [updateFloor]);
+
+  const handleSetDefault = useCallback(async (floorId: string) => {
+    try {
+      await setDefaultFloor(floorId);
+    } catch (error) {
+      console.error('Failed to set default floor:', error);
+    }
+  }, [setDefaultFloor]);
 
   const makeDragHandlers = (index: number) => ({
     onDragStart: (e: React.DragEvent) => {
@@ -191,18 +218,23 @@ export default function FloorPanel() {
             No floors yet.<br />Click &quot;+ Add&quot; to create one.
           </div>
         ) : (
-          floors.map((floor, idx) => (
-            <FloorItem
-              key={floor.id}
-              floor={floor}
-              isActive={floor.id === currentFloorId}
-              onSelect={() => switchFloor(floor.id)}
-              onDelete={() => handleDelete(floor.id)}
-              onDuplicate={() => handleDuplicate(floor.id)}
-              onRename={(name) => handleRename(floor.id, name)}
-              dragHandlers={makeDragHandlers(idx)}
-            />
-          ))
+          floors.map((floor, idx) => {
+            const isDefault = !!(floor.metadata && (floor.metadata as Record<string, unknown>).is_default);
+            return (
+              <FloorItem
+                key={floor.id}
+                floor={floor}
+                isActive={floor.id === currentFloorId}
+                isDefault={isDefault}
+                onSelect={() => switchFloor(floor.id)}
+                onDelete={() => handleDelete(floor.id)}
+                onDuplicate={() => handleDuplicate(floor.id)}
+                onRename={(name) => handleRename(floor.id, name)}
+                onSetDefault={() => handleSetDefault(floor.id)}
+                dragHandlers={makeDragHandlers(idx)}
+              />
+            );
+          })
         )}
       </div>
 

@@ -1,5 +1,5 @@
 'use client';
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Stage, Layer, Image as KonvaImage } from 'react-konva';
 import type Konva from 'konva';
 import { useMarketplaceStore, getFilteredBooths } from '@/store/marketplace-store';
@@ -22,8 +22,13 @@ export default function MarketplaceCanvas() {
   const isPanning = useRef(false);
   const lastPointer = useRef({ x: 0, y: 0 });
 
-  const filteredBooths = getFilteredBooths(booths, filters, sortField, sortDir);
+  const filteredBooths = getFilteredBooths(booths, filters, sortField, sortDir, objects);
   const filteredObjectIds = new Set(filteredBooths.map((b) => b.object_id));
+
+  // Memoize objectIdToBoothId map to avoid recreating on every render
+  const objectIdToBoothId = useMemo(() => {
+    return new Map(booths.map((b) => [b.object_id, b.id]));
+  }, [booths]);
 
   useEffect(() => {
     const onResize = () => {
@@ -78,9 +83,6 @@ export default function MarketplaceCanvas() {
   const handleStageClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (e.target === e.target.getStage()) setSelectedBoothId(null);
   }, [setSelectedBoothId]);
-
-  // Map object_id to booth for click handling
-  const objectIdToBoothId = new Map(booths.map((b) => [b.object_id, b.id]));
 
   const handleObjectClick = useCallback((id: string) => {
     const boothId = objectIdToBoothId.get(id);

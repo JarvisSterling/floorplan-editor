@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { getAuthClient } from '@/lib/supabase-auth';
+import { updateFloorSchema } from '@/lib/floor-schemas';
 
 type Params = { params: Promise<{ id: string }> };
 
 // GET /api/floor-plans/[id] — get floor plan with all objects
-export async function GET(_request: NextRequest, { params }: Params) {
+export async function GET(request: NextRequest, { params }: Params) {
+  const authResult = getAuthClient(request);
+  if (authResult.error) return authResult.error;
+  const { client } = authResult;
+
   const { id } = await params;
-  const { data: floorPlan, error } = await supabaseAdmin
+  const { data: floorPlan, error } = await client
     .from('floor_plans')
     .select('*, floor_plan_objects(*)')
     .eq('id', id)
@@ -18,11 +23,20 @@ export async function GET(_request: NextRequest, { params }: Params) {
 
 // PUT /api/floor-plans/[id] — update floor plan
 export async function PUT(request: NextRequest, { params }: Params) {
+  const authResult = getAuthClient(request);
+  if (authResult.error) return authResult.error;
+  const { client } = authResult;
+
   const { id } = await params;
   const body = await request.json();
-  const { data, error } = await supabaseAdmin
+  const parsed = updateFloorSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const { data, error } = await client
     .from('floor_plans')
-    .update({ ...body, updated_at: new Date().toISOString() })
+    .update({ ...parsed.data, updated_at: new Date().toISOString() })
     .eq('id', id)
     .select()
     .single();
@@ -32,9 +46,13 @@ export async function PUT(request: NextRequest, { params }: Params) {
 }
 
 // DELETE /api/floor-plans/[id] — delete floor plan
-export async function DELETE(_request: NextRequest, { params }: Params) {
+export async function DELETE(request: NextRequest, { params }: Params) {
+  const authResult = getAuthClient(request);
+  if (authResult.error) return authResult.error;
+  const { client } = authResult;
+
   const { id } = await params;
-  const { error } = await supabaseAdmin.from('floor_plans').delete().eq('id', id);
+  const { error } = await client.from('floor_plans').delete().eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ success: true });
 }

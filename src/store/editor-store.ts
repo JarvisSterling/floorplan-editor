@@ -162,6 +162,7 @@ interface EditorState {
   duplicateFloor: (floorId: string) => Promise<FloorPlan | null>;
   updateFloor: (floorId: string, updates: Partial<FloorPlan>) => Promise<void>;
   reorderFloors: (floorIds: string[]) => Promise<void>;
+  setDefaultFloor: (floorId: string) => Promise<void>;
   setFloors: (floors: FloorPlan[]) => void;
 
   // Sync error
@@ -577,8 +578,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   reorderFloors: async (floorIds) => {
-    // Optimistic update
+    // Store original state for rollback
     const { floors } = get();
+    const originalFloors = [...floors];
+    
+    // Optimistic update
     const reordered = floorIds
       .map((id, i) => {
         const f = floors.find((fl) => fl.id === id);
@@ -588,12 +592,48 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ floors: reordered });
 
     try {
-      await fetch('/api/floor-plans/reorder', {
+      const response = await fetch('/api/floor-plans/reorder', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ floor_ids: floorIds }),
       });
-    } catch { /* revert could be added */ }
+      
+      if (!response.ok) {
+        // Rollback on API failure
+        set({ floors: originalFloors });
+        throw new Error('Failed to reorder floors');
+      }
+    } catch (error) {
+      // Rollback on network or other failure
+      set({ floors: originalFloors });
+      console.error('Floor reorder failed:', error);
+      throw error;
+    }
+  },
+
+  setDefaultFloor: async (floorId) => {
+    const { floors } = get();
+    try {
+      // First, remove default flag from all floors
+      const updates = floors.map(async (floor) => {
+        const isDefault = floor.id === floorId;
+        const metadata = { ...floor.metadata, is_default: isDefault };
+        
+        await fetch(`/api/floor-plans/${floor.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ metadata }),
+        });
+        
+        return { ...floor, metadata };
+      });
+      
+      const updatedFloors = await Promise.all(updates);
+      set({ floors: updatedFloors });
+    } catch (error) {
+      console.error('Failed to set default floor:', error);
+      throw error;
+    }
   },
 
   setFloors: (floors) => set({ floors }),

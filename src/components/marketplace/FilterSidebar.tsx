@@ -1,5 +1,5 @@
 'use client';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useMarketplaceStore, type SortField, type SortDir } from '@/store/marketplace-store';
 import type { BoothStatus, BoothCategory } from '@/types/database';
 import { BOOTH_STATUS_LABELS, BOOTH_STATUS_COLORS } from '@/lib/booth-helpers';
@@ -8,7 +8,17 @@ const ALL_STATUSES: BoothStatus[] = ['available', 'reserved', 'sold', 'blocked',
 const ALL_CATEGORIES: BoothCategory[] = ['standard', 'island', 'corner', 'inline', 'peninsula'];
 
 export default function FilterSidebar() {
-  const { filters, setFilters, sortField, sortDir, setSort } = useMarketplaceStore();
+  const { filters, setFilters, sortField, sortDir, setSort, objects } = useMarketplaceStore();
+  
+  // Get available zones from floor plan objects
+  const availableZones = useMemo(() => {
+    if (!objects) return [];
+    return objects
+      .filter(obj => obj.type === 'zone')
+      .map(zone => zone.label || zone.metadata?.name || 'Unnamed Zone')
+      .filter((name, index, arr) => arr.indexOf(name) === index) // Remove duplicates
+      .sort();
+  }, [objects]);
 
   const toggleStatus = (s: BoothStatus) => {
     const cur = filters.statuses;
@@ -106,6 +116,25 @@ export default function FilterSidebar() {
         </div>
       </div>
 
+      {/* Zone Filter */}
+      {availableZones.length > 0 && (
+        <div>
+          <h3 className="text-xs font-medium text-gray-500 mb-2">Zone</h3>
+          <select
+            value={filters.zone ?? ''}
+            onChange={(e) => setFilters({ zone: e.target.value || null })}
+            className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+          >
+            <option value="">All Zones</option>
+            {availableZones.map((zone) => (
+              <option key={zone} value={zone}>
+                {zone}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Sort */}
       <div>
         <h3 className="text-xs font-medium text-gray-500 mb-2">Sort By</h3>
@@ -123,6 +152,8 @@ export default function FilterSidebar() {
           <option value="price_desc">Price (High→Low)</option>
           <option value="size_asc">Size (Small→Large)</option>
           <option value="size_desc">Size (Large→Small)</option>
+          <option value="proximity_asc">Closest to Entrance</option>
+          <option value="proximity_desc">Furthest from Entrance</option>
         </select>
       </div>
 

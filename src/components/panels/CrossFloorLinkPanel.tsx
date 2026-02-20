@@ -2,7 +2,6 @@
 import React, { useState, useMemo } from 'react';
 import { useEditorStore } from '@/store/editor-store';
 
-const LINKABLE_TYPES = ['infrastructure'] as const;
 const LINKABLE_LABELS = ['stairs', 'elevator', 'escalator'];
 
 export default function CrossFloorLinkPanel() {
@@ -41,6 +40,19 @@ export default function CrossFloorLinkPanel() {
   }, [selectedObj]);
 
   const otherFloors = floors.filter((f) => f.id !== currentFloorId);
+
+  // Get linkable objects from the target floor
+  const targetFloorObjects = useMemo(() => {
+    if (!targetFloorId) return [];
+    // For now, we'll need to fetch objects for the target floor
+    // This would ideally be done via the store or API call
+    // For this implementation, we'll assume all infrastructure objects are linkable
+    return Array.from(objects.values()).filter(obj => {
+      if (obj.type === 'infrastructure') return true;
+      const label = (obj.label || '').toLowerCase();
+      return LINKABLE_LABELS.some((l) => label.includes(l));
+    });
+  }, [targetFloorId, objects]);
 
   if (!selectedObj) return null;
 
@@ -97,13 +109,21 @@ export default function CrossFloorLinkPanel() {
             ))}
           </select>
           {targetFloorId && (
-            <input
-              type="text"
-              placeholder="Target object ID"
+            <select
               value={targetObjectId}
               onChange={(e) => setTargetObjectId(e.target.value)}
               className="w-full text-xs border rounded px-2 py-1"
-            />
+            >
+              <option value="">Select target object...</option>
+              {targetFloorObjects.map((obj) => (
+                <option key={obj.id} value={obj.id}>
+                  {obj.label || obj.type} ({obj.x.toFixed(1)}, {obj.y.toFixed(1)})
+                </option>
+              ))}
+              {targetFloorObjects.length === 0 && (
+                <option value="" disabled>No linkable objects found</option>
+              )}
+            </select>
           )}
           <div className="flex gap-1">
             <button

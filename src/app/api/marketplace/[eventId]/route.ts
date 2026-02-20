@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
 // GET /api/marketplace/[eventId] — public marketplace data
+// NOTE: This endpoint intentionally has no authentication to allow public access
+// to the marketplace for browsing available booths. Rate limiting should be
+// handled at the infrastructure level (e.g., Vercel, CDN, or load balancer).
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ eventId: string }> }
