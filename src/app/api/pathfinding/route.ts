@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthClient } from '@/lib/supabase-auth';
 import { findPath } from '@/lib/pathfinding';
+import { generateDirections, totalDistance, estimateWalkingTime, formatWalkingTime } from '@/lib/directions';
 import type { NavNode, NavEdge } from '@/types/database';
 import { z } from 'zod';
 
@@ -56,10 +57,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No path found between the specified nodes' }, { status: 404 });
   }
 
+  // Generate turn-by-turn directions
+  const scale = 50; // default PX_PER_METER
+  const directions = generateDirections(result.nodes, scale);
+  const totalDist = totalDistance(directions);
+  const walkTimeSec = estimateWalkingTime(totalDist);
+
   return NextResponse.json({
     path: result.path,
     distance_m: result.distance,
     nodes: result.nodes,
     step_count: result.path.length,
+    directions: directions.map((d) => ({
+      instruction: d.instruction,
+      distance_m: d.distance_m,
+      direction: d.direction,
+    })),
+    walking_time: formatWalkingTime(walkTimeSec),
+    walking_time_seconds: walkTimeSec,
   });
 }
