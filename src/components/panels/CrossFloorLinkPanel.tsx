@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useMemo } from 'react';
 import { useEditorStore } from '@/store/editor-store';
+import Tooltip from '@/components/ui/Tooltip';
 
 const LINKABLE_LABELS = ['stairs', 'elevator', 'escalator'];
 
@@ -13,20 +14,17 @@ export default function CrossFloorLinkPanel() {
   const [targetObjectId, setTargetObjectId] = useState<string>('');
   const [showPanel, setShowPanel] = useState(false);
 
-  // Get selected object (only show if single linkable object selected)
   const selectedObj = useMemo(() => {
     if (selectedObjectIds.size !== 1) return null;
     const id = Array.from(selectedObjectIds)[0];
     const obj = objects.get(id);
     if (!obj) return null;
-    // Check if it's a linkable type
     if (obj.type === 'infrastructure') return obj;
     const label = (obj.label || '').toLowerCase();
     if (LINKABLE_LABELS.some((l) => label.includes(l))) return obj;
     return null;
   }, [selectedObjectIds, objects]);
 
-  // Get current link info
   const currentLink = useMemo(() => {
     if (!selectedObj) return null;
     const meta = selectedObj.metadata as Record<string, unknown>;
@@ -41,12 +39,8 @@ export default function CrossFloorLinkPanel() {
 
   const otherFloors = floors.filter((f) => f.id !== currentFloorId);
 
-  // Get linkable objects from the target floor
   const targetFloorObjects = useMemo(() => {
     if (!targetFloorId) return [];
-    // For now, we'll need to fetch objects for the target floor
-    // This would ideally be done via the store or API call
-    // For this implementation, we'll assume all infrastructure objects are linkable
     return Array.from(objects.values()).filter(obj => {
       if (obj.type === 'infrastructure') return true;
       const label = (obj.label || '').toLowerCase();
@@ -76,32 +70,34 @@ export default function CrossFloorLinkPanel() {
   };
 
   return (
-    <div className="border-t border-gray-200 p-3 bg-white">
-      <h4 className="text-[10px] font-semibold text-gray-500 uppercase mb-2">
+    <div className="border-t border-white/[0.06] p-3">
+      <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
         Cross-Floor Link
       </h4>
 
       {currentLink ? (
         <div className="space-y-1.5">
-          <div className="flex items-center gap-1 text-xs text-green-700 bg-green-50 rounded px-2 py-1">
+          <div className="flex items-center gap-1 text-xs text-emerald-300 bg-emerald-500/15 rounded-md px-2 py-1.5">
             <span>🔗</span>
             <span>
               Linked to {floors.find((f) => f.id === currentLink.floorId)?.name || 'Unknown'}
             </span>
           </div>
-          <button
-            onClick={handleUnlink}
-            className="text-xs text-red-600 hover:text-red-700 underline"
-          >
-            Remove link
-          </button>
+          <Tooltip content="Remove the cross-floor link">
+            <button
+              onClick={handleUnlink}
+              className="text-xs text-red-400 hover:text-red-300 underline transition-colors"
+            >
+              Remove link
+            </button>
+          </Tooltip>
         </div>
       ) : showPanel ? (
         <div className="space-y-2">
           <select
             value={targetFloorId}
             onChange={(e) => { setTargetFloorId(e.target.value); setTargetObjectId(''); }}
-            className="w-full text-xs border rounded px-2 py-1"
+            className="dark-select w-full"
           >
             <option value="">Select target floor...</option>
             {otherFloors.map((f) => (
@@ -112,7 +108,7 @@ export default function CrossFloorLinkPanel() {
             <select
               value={targetObjectId}
               onChange={(e) => setTargetObjectId(e.target.value)}
-              className="w-full text-xs border rounded px-2 py-1"
+              className="dark-select w-full"
             >
               <option value="">Select target object...</option>
               {targetFloorObjects.map((obj) => (
@@ -126,29 +122,33 @@ export default function CrossFloorLinkPanel() {
             </select>
           )}
           <div className="flex gap-1">
-            <button
-              onClick={handleLink}
-              disabled={!targetFloorId || !targetObjectId}
-              className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded hover:bg-blue-600 disabled:opacity-50"
-            >
-              Link
-            </button>
+            <Tooltip content="Create cross-floor link">
+              <button
+                onClick={handleLink}
+                disabled={!targetFloorId || !targetObjectId}
+                className="text-xs bg-indigo-500 text-white px-2.5 py-1 rounded-md hover:bg-indigo-400 disabled:opacity-50 transition-all duration-150"
+              >
+                Link
+              </button>
+            </Tooltip>
             <button
               onClick={() => setShowPanel(false)}
-              className="text-xs text-gray-500 hover:text-gray-700 px-2 py-0.5"
+              className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1 transition-colors"
             >
               Cancel
             </button>
           </div>
         </div>
       ) : (
-        <button
-          onClick={() => setShowPanel(true)}
-          disabled={otherFloors.length === 0}
-          className="text-xs text-blue-600 hover:text-blue-700 disabled:text-gray-400"
-        >
-          + Link to another floor
-        </button>
+        <Tooltip content="Link this object to an object on another floor">
+          <button
+            onClick={() => setShowPanel(true)}
+            disabled={otherFloors.length === 0}
+            className="text-xs text-indigo-400 hover:text-indigo-300 disabled:text-slate-600 transition-colors"
+          >
+            + Link to another floor
+          </button>
+        </Tooltip>
       )}
     </div>
   );

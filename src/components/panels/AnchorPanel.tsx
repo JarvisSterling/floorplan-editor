@@ -1,17 +1,18 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import type { PositioningAnchor, AnchorType } from '@/types/database';
+import Tooltip from '@/components/ui/Tooltip';
 
 interface AnchorPanelProps {
   floorPlanId: string;
 }
 
-const ANCHOR_TYPES: { value: AnchorType; label: string; icon: string }[] = [
-  { value: 'ble', label: 'BLE Beacon', icon: '📡' },
-  { value: 'uwb', label: 'UWB', icon: '📶' },
-  { value: 'wifi', label: 'Wi-Fi AP', icon: '📶' },
-  { value: 'qr', label: 'QR Code', icon: '📱' },
-  { value: 'nfc', label: 'NFC Tag', icon: '🏷️' },
+const ANCHOR_TYPES: { value: AnchorType; label: string; icon: string; desc: string }[] = [
+  { value: 'ble', label: 'BLE Beacon', icon: '📡', desc: 'Bluetooth Low Energy beacon' },
+  { value: 'uwb', label: 'UWB', icon: '📶', desc: 'Ultra-Wideband positioning' },
+  { value: 'wifi', label: 'Wi-Fi AP', icon: '📶', desc: 'Wi-Fi access point' },
+  { value: 'qr', label: 'QR Code', icon: '📱', desc: 'QR code marker' },
+  { value: 'nfc', label: 'NFC Tag', icon: '🏷️', desc: 'Near Field Communication tag' },
 ];
 
 export default function AnchorPanel({ floorPlanId }: AnchorPanelProps) {
@@ -73,28 +74,32 @@ export default function AnchorPanel({ floorPlanId }: AnchorPanelProps) {
 
   return (
     <div className="flex flex-col gap-3 p-3 text-sm">
-      <h3 className="font-semibold text-white text-base">Positioning Anchors</h3>
+      <h3 className="font-semibold text-slate-200 text-base">Positioning Anchors</h3>
 
       {/* Stats */}
-      <div className="flex gap-2 text-xs text-gray-400">
+      <div className="flex gap-2 text-xs text-slate-500">
         <span>Total: {anchors.length}</span>
         <span>Active: {activeCount}</span>
         {lowBattery.length > 0 && (
-          <span className="text-yellow-400">⚠️ Low battery: {lowBattery.length}</span>
+          <Tooltip content={`${lowBattery.length} anchor(s) with battery below 20%`}>
+            <span className="text-yellow-400">⚠️ Low battery: {lowBattery.length}</span>
+          </Tooltip>
         )}
       </div>
 
       {/* Refresh */}
-      <button
-        onClick={loadAnchors}
-        disabled={loading}
-        className="w-full px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs transition-colors"
-      >
-        {loading ? '⏳ Loading...' : '🔄 Refresh'}
-      </button>
+      <Tooltip content="Refresh anchor list from server">
+        <button
+          onClick={loadAnchors}
+          disabled={loading}
+          className="w-full px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 rounded-md text-xs transition-all duration-150"
+        >
+          {loading ? '⏳ Loading...' : '🔄 Refresh'}
+        </button>
+      </Tooltip>
 
       {/* Anchor list */}
-      <div className="max-h-64 overflow-y-auto space-y-1">
+      <div className="max-h-64 overflow-y-auto dark-scrollbar space-y-1">
         {anchors.map((anchor) => {
           const typeInfo = ANCHOR_TYPES.find((t) => t.value === anchor.type);
           const isSelected = selectedAnchor === anchor.id;
@@ -103,53 +108,61 @@ export default function AnchorPanel({ floorPlanId }: AnchorPanelProps) {
             <div
               key={anchor.id}
               onClick={() => setSelectedAnchor(isSelected ? null : anchor.id)}
-              className={`p-2 rounded cursor-pointer transition-colors ${
-                isSelected ? 'bg-blue-900/50 border border-blue-500' : 'bg-gray-800 hover:bg-gray-700'
+              className={`p-2 rounded-lg cursor-pointer transition-all duration-150 ${
+                isSelected ? 'bg-indigo-500/15 border border-indigo-500/40' : 'bg-white/[0.04] hover:bg-white/[0.08] border border-transparent'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-gray-200 text-xs">
-                  {typeInfo?.icon} {typeInfo?.label || anchor.type}
-                </span>
-                <span className={`text-xs ${anchor.status === 'active' ? 'text-green-400' : 'text-red-400'}`}>
-                  {anchor.status === 'active' ? '●' : '○'}
-                </span>
+                <Tooltip content={typeInfo?.desc || anchor.type} position="right">
+                  <span className="text-slate-300 text-xs">
+                    {typeInfo?.icon} {typeInfo?.label || anchor.type}
+                  </span>
+                </Tooltip>
+                <Tooltip content={anchor.status === 'active' ? 'Active' : 'Inactive'}>
+                  <span className={`text-xs ${anchor.status === 'active' ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {anchor.status === 'active' ? '●' : '○'}
+                  </span>
+                </Tooltip>
               </div>
 
               {anchor.hardware_id && (
-                <div className="text-gray-500 text-xs mt-0.5 font-mono truncate">
+                <div className="text-slate-600 text-xs mt-0.5 font-mono truncate">
                   {anchor.hardware_id}
                 </div>
               )}
 
               {isSelected && (
-                <div className="mt-2 space-y-1 border-t border-gray-700 pt-2">
-                  <div className="text-gray-400 text-xs">
+                <div className="mt-2 space-y-1 border-t border-white/[0.06] pt-2">
+                  <div className="text-slate-500 text-xs">
                     Position: ({anchor.x.toFixed(1)}, {anchor.y.toFixed(1)})
                   </div>
                   {anchor.battery_level !== null && (
-                    <div className={`text-xs ${anchor.battery_level < 20 ? 'text-yellow-400' : 'text-gray-400'}`}>
+                    <div className={`text-xs ${anchor.battery_level < 20 ? 'text-yellow-400' : 'text-slate-500'}`}>
                       🔋 {anchor.battery_level}%
                     </div>
                   )}
                   {anchor.last_seen && (
-                    <div className="text-gray-500 text-xs">
+                    <div className="text-slate-600 text-xs">
                       Last seen: {new Date(anchor.last_seen).toLocaleTimeString()}
                     </div>
                   )}
                   <div className="flex gap-1 mt-1">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleStatus(anchor); }}
-                      className="flex-1 px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-xs"
-                    >
-                      {anchor.status === 'active' ? 'Deactivate' : 'Activate'}
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); deleteAnchor(anchor.id); }}
-                      className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-xs"
-                    >
-                      🗑
-                    </button>
+                    <Tooltip content={anchor.status === 'active' ? 'Deactivate this anchor' : 'Activate this anchor'}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleStatus(anchor); }}
+                        className="flex-1 px-2 py-1 bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 rounded-md text-xs transition-all duration-150"
+                      >
+                        {anchor.status === 'active' ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="Delete this anchor permanently">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteAnchor(anchor.id); }}
+                        className="px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-md text-xs transition-all duration-150"
+                      >
+                        🗑
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
               )}
@@ -159,7 +172,7 @@ export default function AnchorPanel({ floorPlanId }: AnchorPanelProps) {
       </div>
 
       {anchors.length === 0 && !loading && (
-        <div className="text-gray-500 text-xs text-center py-4">
+        <div className="text-slate-600 text-xs text-center py-4">
           No anchors placed on this floor.
           <br />
           Use the canvas tools to place beacons.
