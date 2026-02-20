@@ -2,6 +2,7 @@
 import React from 'react';
 import { Circle, Group, Text } from 'react-konva';
 import type { AttendeePosition } from '@/types/database';
+import { PX_PER_METER } from '@/lib/constants';
 
 interface AttendeeOverlayProps {
   positions: AttendeePosition[];
@@ -26,7 +27,7 @@ export default function AttendeeOverlay({
   return (
     <Group listening={false}>
       {positions.map((pos) => {
-        const accuracyRadius = (pos.accuracy_m || 3) * 50 * inverseScale; // PX_PER_METER
+        const accuracyRadius = (pos.accuracy_m || 3) * PX_PER_METER * inverseScale;
 
         return (
           <Group key={pos.attendee_id}>

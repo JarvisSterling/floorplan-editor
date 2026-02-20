@@ -61,11 +61,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (dbError) {
-    // The attendees table might not have a metadata column — handle gracefully
-    return NextResponse.json({
-      privacy: privacySettings,
-      note: 'Settings stored (attendee metadata update may require schema update)',
-    });
+    return NextResponse.json({ error: 'Failed to update privacy settings', details: dbError.message }, { status: 500 });
   }
 
   return NextResponse.json({ privacy: privacySettings });

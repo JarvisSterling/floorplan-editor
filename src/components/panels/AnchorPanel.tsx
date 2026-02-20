@@ -36,22 +36,36 @@ export default function AnchorPanel({ floorPlanId }: AnchorPanelProps) {
   useEffect(() => { loadAnchors(); }, [loadAnchors]);
 
   const deleteAnchor = async (id: string) => {
-    setAnchors((prev) => prev.filter((a) => a.id !== id));
+    const prev = anchors;
+    setAnchors((p) => p.filter((a) => a.id !== id));
     try {
-      await fetch(`/api/positioning/anchors/${id}`, { method: 'DELETE' });
-    } catch {}
+      const res = await fetch(`/api/positioning/anchors/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        setAnchors(prev);
+        console.error('Failed to delete anchor:', res.statusText);
+      }
+    } catch {
+      setAnchors(prev);
+    }
   };
 
   const toggleStatus = async (anchor: PositioningAnchor) => {
     const newStatus = anchor.status === 'active' ? 'inactive' : 'active';
-    setAnchors((prev) => prev.map((a) => a.id === anchor.id ? { ...a, status: newStatus } : a));
+    const prev = anchors;
+    setAnchors((p) => p.map((a) => a.id === anchor.id ? { ...a, status: newStatus } : a));
     try {
-      await fetch(`/api/positioning/anchors/${anchor.id}`, {
+      const res = await fetch(`/api/positioning/anchors/${anchor.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-    } catch {}
+      if (!res.ok) {
+        setAnchors(prev);
+        console.error('Failed to toggle anchor status:', res.statusText);
+      }
+    } catch {
+      setAnchors(prev);
+    }
   };
 
   const activeCount = anchors.filter((a) => a.status === 'active').length;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthClient } from '@/lib/supabase-auth';
 import type { FloorPlanObject, AttendeePosition } from '@/types/database';
+import { PX_PER_METER } from '@/lib/constants';
 
 // GET /api/positioning/occupancy?floor_plan_id=X — zone occupancy counts
 export async function GET(request: NextRequest) {
@@ -46,8 +47,8 @@ export async function GET(request: NextRequest) {
       zone_id: zone.id,
       label: zone.label,
       count,
-      area_sqm: (w * h) / (50 * 50), // PX_PER_METER^2
-      density_per_sqm: w > 0 && h > 0 ? count / ((w * h) / (50 * 50)) : 0,
+      area_sqm: (w * h) / (PX_PER_METER * PX_PER_METER),
+      density_per_sqm: w > 0 && h > 0 ? count / ((w * h) / (PX_PER_METER * PX_PER_METER)) : 0,
     };
   });
 
