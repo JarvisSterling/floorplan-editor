@@ -8,7 +8,8 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const floorPlanId = searchParams.get('floor_plan_id');
-  const hours = parseInt(searchParams.get('hours') || '24', 10);
+  const hoursRaw = parseInt(searchParams.get('hours') || '24', 10);
+  const hours = Number.isFinite(hoursRaw) && hoursRaw > 0 && hoursRaw <= 720 ? hoursRaw : 24;
 
   if (!floorPlanId) {
     return NextResponse.json({ error: 'floor_plan_id is required' }, { status: 400 });

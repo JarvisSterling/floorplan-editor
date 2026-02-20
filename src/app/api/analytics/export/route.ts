@@ -1,5 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthClient } from '@/lib/supabase-auth';
+import { z } from 'zod';
+
+/** Escape a value for safe CSV output (prevents formula injection & handles commas/quotes) */
+function csvEscape(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  let s = String(val);
+  // Prevent formula injection — prefix with single quote if starts with =, +, -, @, \t, \r
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  // Wrap in quotes if contains comma, quote, or newline
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+const exportParamsSchema = z.object({
+  event_id: z.string().uuid(),
+  format: z.enum(['csv', 'json']).optional().default('csv'),
+  type: z.enum(['booth_visits', 'booth_performance']).optional().default('booth_visits'),
+});
 
 // GET /api/analytics/export?event_id=X&format=csv — export analytics data
 export async function GET(request: NextRequest) {
@@ -7,13 +25,15 @@ export async function GET(request: NextRequest) {
   if (error) return error;
 
   const { searchParams } = new URL(request.url);
-  const eventId = searchParams.get('event_id');
-  const format = searchParams.get('format') || 'csv';
-  const dataType = searchParams.get('type') || 'booth_visits';
-
-  if (!eventId) {
-    return NextResponse.json({ error: 'event_id is required' }, { status: 400 });
+  const parsed = exportParamsSchema.safeParse({
+    event_id: searchParams.get('event_id'),
+    format: searchParams.get('format') || undefined,
+    type: searchParams.get('type') || undefined,
+  });
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   }
+  const { event_id: eventId, format, type: dataType } = parsed.data;
 
   if (dataType === 'booth_visits') {
     const { data: booths } = await client
@@ -33,7 +53,7 @@ export async function GET(request: NextRequest) {
     if (format === 'csv') {
       const header = 'visit_id,booth_id,booth_number,attendee_id,entered_at,exited_at,dwell_seconds,source\n';
       const rows = (visits || []).map((v: Record<string, unknown>) =>
-        `${v.id},${v.booth_id},${boothMap.get(v.booth_id as string) || ''},${v.attendee_id},${v.entered_at},${v.exited_at || ''},${v.dwell_seconds || ''},${v.source}`
+        [v.id, v.booth_id, boothMap.get(v.booth_id as string) || '', v.attendee_id, v.entered_at, v.exited_at || '', v.dwell_seconds || '', v.source].map(csvEscape).join(',')
       ).join('\n');
 
       return new Response(header + rows, {
@@ -72,7 +92,7 @@ export async function GET(request: NextRequest) {
       const header = 'booth_number,status,category,size_sqm,total_visits,avg_dwell_seconds\n';
       const rows = (booths || []).map((b: Record<string, unknown>) => {
         const s = stats[b.id as string];
-        return `${b.booth_number},${b.status},${b.category || ''},${b.size_sqm || ''},${s?.visits || 0},${s ? Math.round(s.totalDwell / Math.max(s.visits, 1)) : 0}`;
+        return [b.booth_number, b.status, b.category || '', b.size_sqm || '', s?.visits || 0, s ? Math.round(s.totalDwell / Math.max(s.visits, 1)) : 0].map(csvEscape).join(',');
       }).join('\n');
 
       return new Response(header + rows, {
@@ -91,5 +111,6 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ error: 'Invalid data type. Use booth_visits or booth_performance.' }, { status: 400 });
+  // dataType is validated by Zod so this is unreachable, but satisfy TypeScript
+  return NextResponse.json({ error: 'Invalid data type' }, { status: 400 });
 }
