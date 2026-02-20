@@ -15,6 +15,7 @@ interface Props {
 
 export default function MarketplacePage({ params }: Props) {
   const { eventId } = use(params);
+  const [floorPlanData, setFloorPlanData] = React.useState<FloorPlanWithObjects[]>([]);
   const { 
     loading, 
     error, 
@@ -39,6 +40,8 @@ export default function MarketplacePage({ params }: Props) {
       .then((data) => {
         if (data.floorPlans.length === 0) throw new Error('No floor plans found');
 
+        setFloorPlanData(data.floorPlans);
+
         // Map booth object_ids to floor plan objects for all floor plans
         const objMap = new Map<string, FloorPlanObject>();
         for (const plan of data.floorPlans) {
@@ -58,8 +61,8 @@ export default function MarketplacePage({ params }: Props) {
   }, [eventId, setData, setLoading, setError]);
 
   const handleFloorPlanChange = (index: number) => {
-    if (index >= 0 && index < floorPlans.length) {
-      const selectedPlan = floorPlans[index];
+    if (index >= 0 && index < floorPlanData.length) {
+      const selectedPlan = floorPlanData[index];
       setSelectedFloorPlan(index, selectedPlan.floor_plan_objects || []);
     }
   };

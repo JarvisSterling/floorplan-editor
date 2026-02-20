@@ -48,7 +48,9 @@ export async function POST(
     clientId = user.id;
   } else {
     // Unauthenticated request - use IP for rate limiting
-    const ip = request.ip || request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const forwardedFor = request.headers.get('x-forwarded-for');
+    const realIp = request.headers.get('x-real-ip');
+    const ip = forwardedFor?.split(',')[0] || realIp || 'unknown';
     if (!checkRateLimit(ip)) {
       return NextResponse.json({ 
         error: 'Rate limit exceeded. Try again in 15 minutes.' 

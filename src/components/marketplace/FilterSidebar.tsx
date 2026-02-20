@@ -15,7 +15,10 @@ export default function FilterSidebar() {
     if (!objects) return [];
     return objects
       .filter(obj => obj.type === 'zone')
-      .map(zone => zone.label || zone.metadata?.name || 'Unnamed Zone')
+      .map(zone => {
+        const name = zone.label || (zone.metadata as any)?.name || 'Unnamed Zone';
+        return String(name);
+      })
       .filter((name, index, arr) => arr.indexOf(name) === index) // Remove duplicates
       .sort();
   }, [objects]);
@@ -160,7 +163,15 @@ export default function FilterSidebar() {
       {/* Reset */}
       <button
         onClick={() => {
-          setFilters({ statuses: ['available'], categories: [], minSize: null, maxSize: null, minPrice: null, maxPrice: null, zone: null });
+          setFilters({ 
+            statuses: ['available'], 
+            categories: [], 
+            minSize: null, 
+            maxSize: null, 
+            minPrice: null, 
+            maxPrice: null, 
+            zone: null 
+          });
           setSort('booth_number', 'asc');
         }}
         className="w-full text-sm text-blue-600 hover:text-blue-800"
