@@ -106,11 +106,22 @@ export const useNavStore = create<NavState>((set, get) => ({
   },
 
   deleteNode: async (id) => {
+    // Snapshot state for rollback
+    const prevNodes = get().nodes;
+    const prevEdges = get().edges;
+    const prevSelectedId = get().selectedNodeId;
     get().removeNode(id);
     try {
-      await fetch(`/api/nav-nodes/${id}`, { method: 'DELETE' });
-    } catch {
-      // Already removed from local state
+      const res = await fetch(`/api/nav-nodes/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        // Rollback on API failure
+        set({ nodes: prevNodes, edges: prevEdges, selectedNodeId: prevSelectedId });
+        console.error('Failed to delete node:', res.statusText);
+      }
+    } catch (err) {
+      // Rollback on network failure
+      set({ nodes: prevNodes, edges: prevEdges, selectedNodeId: prevSelectedId });
+      console.error('Failed to delete node:', err);
     }
   },
 
@@ -137,10 +148,18 @@ export const useNavStore = create<NavState>((set, get) => ({
   },
 
   deleteEdge: async (id) => {
+    const prevEdges = get().edges;
     get().removeEdge(id);
     try {
-      await fetch(`/api/nav-edges/${id}`, { method: 'DELETE' });
-    } catch {}
+      const res = await fetch(`/api/nav-edges/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        set({ edges: prevEdges });
+        console.error('Failed to delete edge:', res.statusText);
+      }
+    } catch (err) {
+      set({ edges: prevEdges });
+      console.error('Failed to delete edge:', err);
+    }
   },
 
   updateNodePosition: async (id, x, y) => {

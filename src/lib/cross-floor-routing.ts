@@ -113,8 +113,8 @@ function findCrossFloorBFS(
     floorEdges.get(fid)!.push(e);
   }
 
-  // BFS: state = { currentNodeId, floorId, segments so far }
-  interface BFSState {
+  // Dijkstra-style search: prioritize by total distance for shortest path
+  interface SearchState {
     nodeId: string;
     floorId: string;
     segments: FloorSegment[];
@@ -122,7 +122,7 @@ function findCrossFloorBFS(
     totalDist: number;
   }
 
-  const queue: BFSState[] = [{
+  const queue: SearchState[] = [{
     nodeId: startNodeId,
     floorId: startNode.floor_plan_id,
     segments: [],
@@ -130,11 +130,18 @@ function findCrossFloorBFS(
     totalDist: 0,
   }];
 
-  const visited = new Set<string>(); // nodeId to avoid cycles
-  visited.add(startNodeId);
+  const bestDist = new Map<string, number>(); // nodeId → best distance seen
+  bestDist.set(startNodeId, 0);
+
+  let bestRoute: CrossFloorRoute | null = null;
 
   while (queue.length > 0) {
+    // Pick state with smallest totalDist (priority queue via sort — adequate for small floor counts)
+    queue.sort((a, b) => a.totalDist - b.totalDist);
     const state = queue.shift()!;
+
+    // Prune if we already found a better complete route
+    if (bestRoute && state.totalDist >= bestRoute.total_distance_m) continue;
 
     // If we're on the destination floor, try to path to the end
     if (state.floorId === endNode.floor_plan_id) {
@@ -143,21 +150,25 @@ function findCrossFloorBFS(
       const result = findPath(fNodes, fEdges, state.nodeId, endNodeId, options);
 
       if (result) {
-        return {
-          segments: [
-            ...state.segments,
-            {
-              floor_plan_id: state.floorId,
-              path: result.path,
-              nodes: result.nodes,
-              distance_m: result.distance,
-              directions: generateDirections(result.nodes, scale),
-            },
-          ],
-          total_distance_m: state.totalDist + result.distance,
-          floor_transitions: state.transitions,
-        };
+        const candidateDist = state.totalDist + result.distance;
+        if (!bestRoute || candidateDist < bestRoute.total_distance_m) {
+          bestRoute = {
+            segments: [
+              ...state.segments,
+              {
+                floor_plan_id: state.floorId,
+                path: result.path,
+                nodes: result.nodes,
+                distance_m: result.distance,
+                directions: generateDirections(result.nodes, scale),
+              },
+            ],
+            total_distance_m: candidateDist,
+            floor_transitions: state.transitions,
+          };
+        }
       }
+      continue; // Don't explore further from destination floor
     }
 
     // Try each linked node on this floor
@@ -167,7 +178,6 @@ function findCrossFloorBFS(
 
       const targetNode = nodeMap.get(linkNode.linked_floor_node_id);
       if (!targetNode) continue;
-      if (visited.has(targetNode.id)) continue;
 
       // Path from current position to this link node
       const fNodes = floorNodes.get(state.floorId) || [];
@@ -176,7 +186,12 @@ function findCrossFloorBFS(
 
       if (!pathToLink) continue;
 
-      visited.add(targetNode.id);
+      const newDist = state.totalDist + pathToLink.distance;
+
+      // Only explore if this is a better path to this node
+      const prevBest = bestDist.get(targetNode.id) ?? Infinity;
+      if (newDist >= prevBest) continue;
+      bestDist.set(targetNode.id, newDist);
 
       queue.push({
         nodeId: targetNode.id,
@@ -201,10 +216,10 @@ function findCrossFloorBFS(
             to_node_id: targetNode.id,
           },
         ],
-        totalDist: state.totalDist + pathToLink.distance,
+        totalDist: newDist,
       });
     }
   }
 
-  return null; // No cross-floor path found
+  return bestRoute; // null if no cross-floor path found
 }

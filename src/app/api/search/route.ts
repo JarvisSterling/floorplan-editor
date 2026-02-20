@@ -5,7 +5,7 @@ import type { NavNode } from '@/types/database';
 import { z } from 'zod';
 
 const searchSchema = z.object({
-  event_id: z.string(),
+  event_id: z.string().uuid(),
   query: z.string().min(1).max(200).optional(),
   type: z.enum(['booth', 'facility', 'nearest']).optional().default('booth'),
   floor_plan_id: z.string().uuid().optional(),
@@ -34,12 +34,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'query is required for booth search' }, { status: 400 });
     }
 
+    // Sanitize query for PostgREST filter injection — strip special filter chars
+    const sanitizedQuery = query.replace(/[%_(),.]/g, '');
+
     // Search booths
     const { data: booths, error: boothError } = await client
       .from('booths')
       .select('*, booth_profiles(*)')
       .eq('event_id', event_id)
-      .or(`booth_number.ilike.%${query}%`);
+      .ilike('booth_number', `%${sanitizedQuery}%`);
 
     if (boothError) return NextResponse.json({ error: boothError.message }, { status: 500 });
 
@@ -47,7 +50,7 @@ export async function POST(request: NextRequest) {
     const { data: profileMatches, error: profileError } = await client
       .from('booth_profiles')
       .select('*, booths!inner(*)')
-      .ilike('company_name', `%${query}%`);
+      .ilike('company_name', `%${sanitizedQuery}%`);
 
     if (profileError) return NextResponse.json({ error: profileError.message }, { status: 500 });
 

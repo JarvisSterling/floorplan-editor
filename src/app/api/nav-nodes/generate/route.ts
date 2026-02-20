@@ -60,14 +60,15 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Insert nodes
-  const nodeInserts = result.nodes.map((n) => ({
+  // Insert nodes — add generation_index to metadata so we can reliably
+  // map inserted rows back to their original indices regardless of DB return order.
+  const nodeInserts = result.nodes.map((n, idx) => ({
     floor_plan_id: floorPlanId,
     x: n.x,
     y: n.y,
     type: n.type,
     accessible: n.accessible,
-    metadata: n.metadata,
+    metadata: { ...n.metadata, generation_index: idx },
   }));
 
   const { data: insertedNodes, error: insertError } = await client
@@ -77,16 +78,29 @@ export async function POST(request: NextRequest) {
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
 
+  // Build index→id map from generation_index metadata for reliable edge mapping
+  const indexToNodeId = new Map<number, string>();
+  if (insertedNodes) {
+    for (const node of insertedNodes) {
+      const idx = (node.metadata as Record<string, unknown>)?.generation_index;
+      if (typeof idx === 'number') {
+        indexToNodeId.set(idx, node.id);
+      }
+    }
+  }
+
   // Insert edges with real node IDs
   if (result.edges.length > 0 && insertedNodes) {
-    const edgeInserts = result.edges.map((e) => ({
-      from_node_id: insertedNodes[e.fromIndex].id,
-      to_node_id: insertedNodes[e.toIndex].id,
-      distance_m: e.distance_m,
-      bidirectional: true,
-      accessible: e.accessible,
-      weight_modifier: 1.0,
-    }));
+    const edgeInserts = result.edges
+      .filter((e) => indexToNodeId.has(e.fromIndex) && indexToNodeId.has(e.toIndex))
+      .map((e) => ({
+        from_node_id: indexToNodeId.get(e.fromIndex)!,
+        to_node_id: indexToNodeId.get(e.toIndex)!,
+        distance_m: e.distance_m,
+        bidirectional: true,
+        accessible: e.accessible,
+        weight_modifier: 1.0,
+      }));
 
     const { error: edgeError } = await client.from('nav_edges').insert(edgeInserts);
     if (edgeError) return NextResponse.json({ error: edgeError.message }, { status: 500 });

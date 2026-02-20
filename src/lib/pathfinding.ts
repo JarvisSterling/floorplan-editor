@@ -1,4 +1,5 @@
 import type { NavNode, NavEdge } from '@/types/database';
+import { PX_PER_METER } from './constants';
 
 interface PathResult {
   path: string[];       // ordered node IDs
@@ -62,7 +63,7 @@ export function findPath(
     if (!n) return Infinity;
     const dx = n.x - endX;
     const dy = n.y - endY;
-    return Math.sqrt(dx * dx + dy * dy) / 50; // PX_PER_METER approximation
+    return Math.sqrt(dx * dx + dy * dy) / PX_PER_METER;
   }
 
   // A* with binary-ish priority queue (simple sorted array for moderate graph sizes)

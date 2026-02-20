@@ -1,8 +1,9 @@
 'use client';
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Circle, Line, Group, Text } from 'react-konva';
 import { useNavStore } from '@/store/nav-store';
 import { useEditorStore } from '@/store/editor-store';
+import { PX_PER_METER } from '@/lib/constants';
 import type { NavNode } from '@/types/database';
 
 const NODE_COLORS: Record<NavNode['type'], string> = {
@@ -43,7 +44,7 @@ export default function NavOverlay() {
           const dx = fromNode.x - toNode.x;
           const dy = fromNode.y - toNode.y;
           const distPx = Math.sqrt(dx * dx + dy * dy);
-          const distM = distPx / 50; // PX_PER_METER
+          const distM = distPx / PX_PER_METER;
           createEdge(connectFromNodeId, nodeId, Math.max(0.1, distM));
         }
         setConnectFromNode(null);
@@ -64,12 +65,25 @@ export default function NavOverlay() {
     }
   }, [toolMode, floorPlanId, createNode]);
 
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
   const inverseScale = 1 / zoom;
 
   return (
     <Group
       listening={toolMode !== 'none'}
+      onMouseMove={(e) => {
+        if (connectFromNodeId) {
+          const stage = e.target.getStage();
+          if (!stage) return;
+          const pos = stage.getPointerPosition();
+          if (!pos) return;
+          const transform = stage.getAbsoluteTransform().copy().invert();
+          const point = transform.point(pos);
+          setMousePos(point);
+        }
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           const stage = e.target.getStage();
@@ -99,13 +113,13 @@ export default function NavOverlay() {
         );
       })}
 
-      {/* Connect preview line */}
-      {connectFromNodeId && (() => {
+      {/* Connect preview line — follows mouse cursor */}
+      {connectFromNodeId && mousePos && (() => {
         const fromNode = nodeMap.get(connectFromNodeId);
         if (!fromNode) return null;
         return (
           <Line
-            points={[fromNode.x, fromNode.y, fromNode.x, fromNode.y]}
+            points={[fromNode.x, fromNode.y, mousePos.x, mousePos.y]}
             stroke="#FBBF2480"
             strokeWidth={2 * inverseScale}
             dash={[4 * inverseScale, 4 * inverseScale]}
