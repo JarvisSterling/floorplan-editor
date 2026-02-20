@@ -45,12 +45,23 @@ export async function POST(request: NextRequest, { params }: Params) {
       .eq('floor_plan_id', floor_plan_id);
   }
 
-  // Insert template objects with new floor_plan_id
+  // Allowlist of fields that can be inserted into floor_plan_objects
+  const ALLOWED_FIELDS = new Set([
+    'type', 'x', 'y', 'width', 'height', 'rotation', 'label',
+    'color', 'stroke', 'stroke_width', 'opacity', 'z_index',
+    'shape', 'metadata', 'layer', 'locked', 'visible', 'points',
+  ]);
+
+  // Insert template objects with new floor_plan_id, filtering to allowed fields only
   const objects = templateData.objects.map((obj: unknown) => {
     const o = obj as Record<string, unknown>;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { id: _id, created_at: _ca, updated_at: _ua, floor_plan_id: _fp, ...rest } = o as Record<string, unknown> & { id?: unknown; created_at?: unknown; updated_at?: unknown; floor_plan_id?: unknown };
-    return { ...rest, floor_plan_id };
+    const sanitized: Record<string, unknown> = { floor_plan_id };
+    for (const [key, val] of Object.entries(o)) {
+      if (ALLOWED_FIELDS.has(key) && val !== undefined) {
+        sanitized[key] = val;
+      }
+    }
+    return sanitized;
   });
 
   const { data: inserted, error: insertError } = await client

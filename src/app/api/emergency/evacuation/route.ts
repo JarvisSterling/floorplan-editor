@@ -39,10 +39,16 @@ export async function POST(request: NextRequest) {
   }
 
   const nodeIds = nodes.map((n: NavNode) => n.id);
-  const { data: edges, error: edgeError } = await client
-    .from('nav_edges')
-    .select('*')
-    .or(`from_node_id.in.(${nodeIds.join(',')}),to_node_id.in.(${nodeIds.join(',')})`);
+  const [fromResult, toResult] = await Promise.all([
+    client.from('nav_edges').select('*').in('from_node_id', nodeIds),
+    client.from('nav_edges').select('*').in('to_node_id', nodeIds),
+  ]);
+  const edgeError = fromResult.error || toResult.error;
+  const edgeMap = new Map<string, NavEdge>();
+  for (const e of [...(fromResult.data || []), ...(toResult.data || [])] as NavEdge[]) {
+    edgeMap.set(e.id, e);
+  }
+  const edges = Array.from(edgeMap.values());
 
   if (edgeError) return NextResponse.json({ error: edgeError.message }, { status: 500 });
 
