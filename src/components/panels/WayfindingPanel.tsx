@@ -2,7 +2,12 @@
 import React from 'react';
 import { useNavStore, type NavToolMode, type NavNodePlaceType } from '@/store/nav-store';
 import { useEditorStore } from '@/store/editor-store';
-import Tooltip from '@/components/ui/Tooltip';
+import { Button } from '@/components/ui/button';
+import { Toggle } from '@/components/ui/toggle';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const NODE_TYPES: { value: NavNodePlaceType; label: string; icon: string; desc: string }[] = [
   { value: 'waypoint', label: 'Waypoint', icon: '📍', desc: 'General navigation point' },
@@ -31,22 +36,23 @@ export default function WayfindingPanel() {
 
   return (
     <div className="flex flex-col gap-3 p-3 text-sm">
-      <h3 className="font-semibold text-slate-200 text-base">Wayfinding</h3>
+      <h3 className="font-semibold text-foreground text-base">Wayfinding</h3>
 
       {/* Tool modes */}
       <div className="flex gap-1">
         {TOOL_MODES.map((mode) => (
-          <Tooltip key={mode.value} content={mode.desc}>
-            <button
-              onClick={() => setToolMode(mode.value)}
-              className={`flex-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all duration-150 ${
-                toolMode === mode.value
-                  ? 'bg-indigo-500 text-white shadow-sm shadow-indigo-500/30'
-                  : 'bg-white/[0.06] text-slate-400 hover:bg-white/[0.1] hover:text-slate-200'
-              }`}
-            >
-              {mode.icon} {mode.label}
-            </button>
+          <Tooltip key={mode.value}>
+            <TooltipTrigger asChild>
+              <Toggle
+                size="sm"
+                pressed={toolMode === mode.value}
+                onPressedChange={() => setToolMode(mode.value)}
+                className="flex-1 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+              >
+                {mode.icon} {mode.label}
+              </Toggle>
+            </TooltipTrigger>
+            <TooltipContent>{mode.desc}</TooltipContent>
           </Tooltip>
         ))}
       </div>
@@ -54,20 +60,21 @@ export default function WayfindingPanel() {
       {/* Node type selector */}
       {toolMode === 'place-node' && (
         <div className="space-y-1">
-          <label className="text-slate-500 text-xs">Node Type</label>
+          <Label className="text-xs text-muted-foreground">Node Type</Label>
           <div className="grid grid-cols-2 gap-1">
             {NODE_TYPES.map((t) => (
-              <Tooltip key={t.value} content={t.desc}>
-                <button
-                  onClick={() => setPlaceNodeType(t.value)}
-                  className={`px-2 py-1 rounded-md text-xs transition-all duration-150 ${
-                    placeNodeType === t.value
-                      ? 'bg-indigo-500 text-white shadow-sm shadow-indigo-500/30'
-                      : 'bg-white/[0.06] text-slate-400 hover:bg-white/[0.1] hover:text-slate-200'
-                  }`}
-                >
-                  {t.icon} {t.label}
-                </button>
+              <Tooltip key={t.value}>
+                <TooltipTrigger asChild>
+                  <Toggle
+                    size="sm"
+                    pressed={placeNodeType === t.value}
+                    onPressedChange={() => setPlaceNodeType(t.value)}
+                    className="text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                  >
+                    {t.icon} {t.label}
+                  </Toggle>
+                </TooltipTrigger>
+                <TooltipContent>{t.desc}</TooltipContent>
               </Tooltip>
             ))}
           </div>
@@ -75,77 +82,86 @@ export default function WayfindingPanel() {
       )}
 
       {/* Auto-generate */}
-      <div className="border-t border-white/[0.06] pt-2">
-        <Tooltip content="Automatically generate navigation graph from floor objects">
-          <button
-            onClick={() => generateGraph(floorPlanId)}
-            disabled={isLoading || floorPlanId === 'demo'}
-            className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-white/[0.06] disabled:text-slate-600 text-white rounded-md text-xs font-medium transition-all duration-150 shadow-sm"
-          >
-            {isLoading ? '⏳ Generating...' : '⚡ Auto-Generate Graph'}
-          </button>
-        </Tooltip>
-        <Tooltip content="Reload navigation data from server">
-          <button
-            onClick={() => loadNavData(floorPlanId)}
-            disabled={isLoading || floorPlanId === 'demo'}
-            className="w-full mt-1 px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.1] disabled:text-slate-600 text-slate-300 rounded-md text-xs transition-all duration-150"
-          >
-            🔄 Reload
-          </button>
-        </Tooltip>
+      <Separator />
+      <div className="space-y-1">
+        <Button
+          className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs"
+          size="sm"
+          onClick={() => generateGraph(floorPlanId)}
+          disabled={isLoading || floorPlanId === 'demo'}
+        >
+          {isLoading ? '⏳ Generating...' : '⚡ Auto-Generate Graph'}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="w-full text-xs"
+          onClick={() => loadNavData(floorPlanId)}
+          disabled={isLoading || floorPlanId === 'demo'}
+        >
+          🔄 Reload
+        </Button>
       </div>
 
       {/* Stats */}
-      <div className="border-t border-white/[0.06] pt-2 text-slate-500 text-xs">
-        <div>Nodes: {nodes.length} | Edges: {edges.length}</div>
+      <Separator />
+      <div className="text-muted-foreground text-xs">
+        Nodes: {nodes.length} | Edges: {edges.length}
       </div>
 
       {/* Selected node details */}
       {selectedNode && (
-        <div className="border-t border-white/[0.06] pt-2 space-y-1">
-          <h4 className="text-slate-300 font-medium text-xs">Selected Node</h4>
-          <div className="text-slate-500 text-xs space-y-0.5">
-            <div>Type: {selectedNode.type}</div>
-            <div>Position: ({selectedNode.x.toFixed(1)}, {selectedNode.y.toFixed(1)})</div>
-            <div>Accessible: {selectedNode.accessible ? '✅' : '❌'}</div>
-          </div>
-          <Tooltip content="Permanently delete this node">
-            <button
+        <>
+          <Separator />
+          <div className="space-y-1">
+            <h4 className="text-foreground font-medium text-xs">Selected Node</h4>
+            <div className="text-muted-foreground text-xs space-y-0.5">
+              <div>Type: {selectedNode.type}</div>
+              <div>Position: ({selectedNode.x.toFixed(1)}, {selectedNode.y.toFixed(1)})</div>
+              <div>Accessible: {selectedNode.accessible ? '✅' : '❌'}</div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-xs text-destructive hover:bg-destructive/10"
               onClick={() => { deleteNode(selectedNode.id); selectNode(null); }}
-              className="w-full px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-md text-xs mt-1 transition-all duration-150"
             >
               Delete Node
-            </button>
-          </Tooltip>
-        </div>
+            </Button>
+          </div>
+        </>
       )}
 
       {/* Edge list */}
       {edges.length > 0 && (
-        <div className="border-t border-white/[0.06] pt-2">
-          <h4 className="text-slate-300 font-medium text-xs mb-1">Edges ({edges.length})</h4>
-          <div className="max-h-32 overflow-y-auto dark-scrollbar space-y-0.5">
-            {edges.slice(0, 20).map((edge) => (
-              <div key={edge.id} className="flex items-center justify-between text-xs text-slate-500">
-                <span>{edge.distance_m.toFixed(1)}m {edge.accessible ? '♿' : ''}</span>
-                {toolMode === 'delete' && (
-                  <Tooltip content="Delete this edge">
-                    <button
-                      onClick={() => deleteEdge(edge.id)}
-                      className="text-red-400 hover:text-red-300 transition-colors"
-                    >
-                      ✕
-                    </button>
-                  </Tooltip>
+        <>
+          <Separator />
+          <div>
+            <h4 className="text-foreground font-medium text-xs mb-1">Edges ({edges.length})</h4>
+            <ScrollArea className="max-h-32">
+              <div className="space-y-0.5">
+                {edges.slice(0, 20).map((edge) => (
+                  <div key={edge.id} className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{edge.distance_m.toFixed(1)}m {edge.accessible ? '♿' : ''}</span>
+                    {toolMode === 'delete' && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 text-destructive hover:bg-destructive/10"
+                        onClick={() => deleteEdge(edge.id)}
+                      >
+                        <span className="text-xs">✕</span>
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {edges.length > 20 && (
+                  <div className="text-muted-foreground text-xs">...and {edges.length - 20} more</div>
                 )}
               </div>
-            ))}
-            {edges.length > 20 && (
-              <div className="text-slate-600 text-xs">...and {edges.length - 20} more</div>
-            )}
+            </ScrollArea>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

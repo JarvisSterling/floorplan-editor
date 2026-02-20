@@ -22,12 +22,12 @@ export default function ContextMenu() {
   return (
     <div
       ref={ref}
-      className="fixed bg-white border border-gray-200 rounded shadow-lg py-1 z-50 min-w-[160px]"
+      className="fixed bg-popover border border-border rounded-lg shadow-xl py-1 z-50 min-w-[160px]"
       style={{ left: contextMenu.x, top: contextMenu.y }}
     >
       {!isBooth && (
         <button
-          className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 transition-colors"
+          className="w-full text-left px-3 py-1.5 text-xs text-popover-foreground hover:bg-accent transition-colors"
           onClick={(e) => {
             e.stopPropagation();
             convertToBooth(contextMenu.objectId);
@@ -39,7 +39,7 @@ export default function ContextMenu() {
       )}
       {isBooth && (
         <button
-          className="w-full text-left px-3 py-1.5 text-xs hover:bg-red-50 text-red-600 transition-colors"
+          className="w-full text-left px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"
           onClick={(e) => {
             e.stopPropagation();
             removeBooth(contextMenu.objectId);
@@ -50,7 +50,7 @@ export default function ContextMenu() {
         </button>
       )}
       <button
-        className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 text-gray-500 transition-colors"
+        className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent transition-colors"
         onClick={(e) => { e.stopPropagation(); setContextMenu(null); }}
       >
         Cancel

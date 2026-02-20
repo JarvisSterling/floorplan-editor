@@ -12,6 +12,7 @@ import useKeyboardShortcuts from '@/hooks/useKeyboardShortcuts';
 import useAutoSave from '@/hooks/useAutoSave';
 import ContextMenu from '@/components/editor/ContextMenu';
 import { useEditorStore } from '@/store/editor-store';
+import { Badge } from '@/components/ui/badge';
 
 const EditorCanvas = dynamic(() => import('@/components/editor/Canvas'), { ssr: false });
 
@@ -21,7 +22,6 @@ export default function EditorPage() {
 
   const { loadFloors, currentFloorId, floors } = useEditorStore();
 
-  // Load floors on mount (using event_id from URL or default)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const eventId = params.get('event_id') || 'demo';
@@ -29,15 +29,15 @@ export default function EditorPage() {
   }, [loadFloors]);
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-gray-100">
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
       <Toolbar />
       {/* Floor indicator bar */}
       {currentFloorId && floors.length > 1 && (
-        <div className="bg-blue-50 border-b border-blue-200 px-4 py-1 flex items-center gap-2">
-          <span className="text-xs text-blue-700 font-medium">
+        <div className="bg-primary/5 border-b border-primary/20 px-4 py-1 flex items-center gap-2">
+          <Badge variant="outline" className="text-xs border-primary/30 text-primary">
             📍 {floors.find((f) => f.id === currentFloorId)?.name || 'Unknown Floor'}
-          </span>
-          <span className="text-[10px] text-blue-500">
+          </Badge>
+          <span className="text-[10px] text-muted-foreground">
             ({floors.length} floors)
           </span>
         </div>

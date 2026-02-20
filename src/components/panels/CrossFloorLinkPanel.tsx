@@ -1,7 +1,16 @@
 'use client';
 import React, { useState, useMemo } from 'react';
 import { useEditorStore } from '@/store/editor-store';
-import Tooltip from '@/components/ui/Tooltip';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const LINKABLE_LABELS = ['stairs', 'elevator', 'escalator'];
 
@@ -70,85 +79,87 @@ export default function CrossFloorLinkPanel() {
   };
 
   return (
-    <div className="border-t border-white/[0.06] p-3">
-      <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+    <div className="pt-3">
+      <Separator className="mb-3" />
+      <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
         Cross-Floor Link
       </h4>
 
       {currentLink ? (
         <div className="space-y-1.5">
-          <div className="flex items-center gap-1 text-xs text-emerald-300 bg-emerald-500/15 rounded-md px-2 py-1.5">
+          <div className="flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 rounded-md px-2 py-1.5">
             <span>🔗</span>
             <span>
               Linked to {floors.find((f) => f.id === currentLink.floorId)?.name || 'Unknown'}
             </span>
           </div>
-          <Tooltip content="Remove the cross-floor link">
-            <button
-              onClick={handleUnlink}
-              className="text-xs text-red-400 hover:text-red-300 underline transition-colors"
-            >
-              Remove link
-            </button>
-          </Tooltip>
+          <Button
+            variant="link"
+            size="sm"
+            className="text-xs text-destructive p-0 h-auto"
+            onClick={handleUnlink}
+          >
+            Remove link
+          </Button>
         </div>
       ) : showPanel ? (
         <div className="space-y-2">
-          <select
-            value={targetFloorId}
-            onChange={(e) => { setTargetFloorId(e.target.value); setTargetObjectId(''); }}
-            className="dark-select w-full"
-          >
-            <option value="">Select target floor...</option>
-            {otherFloors.map((f) => (
-              <option key={f.id} value={f.id}>{f.name} (L{f.floor_number})</option>
-            ))}
-          </select>
-          {targetFloorId && (
-            <select
-              value={targetObjectId}
-              onChange={(e) => setTargetObjectId(e.target.value)}
-              className="dark-select w-full"
-            >
-              <option value="">Select target object...</option>
-              {targetFloorObjects.map((obj) => (
-                <option key={obj.id} value={obj.id}>
-                  {obj.label || obj.type} ({obj.x.toFixed(1)}, {obj.y.toFixed(1)})
-                </option>
+          <Select value={targetFloorId} onValueChange={(v) => { setTargetFloorId(v); setTargetObjectId(''); }}>
+            <SelectTrigger className="h-7 text-xs">
+              <SelectValue placeholder="Select target floor..." />
+            </SelectTrigger>
+            <SelectContent>
+              {otherFloors.map((f) => (
+                <SelectItem key={f.id} value={f.id}>{f.name} (L{f.floor_number})</SelectItem>
               ))}
-              {targetFloorObjects.length === 0 && (
-                <option value="" disabled>No linkable objects found</option>
-              )}
-            </select>
+            </SelectContent>
+          </Select>
+          {targetFloorId && (
+            <Select value={targetObjectId} onValueChange={setTargetObjectId}>
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue placeholder="Select target object..." />
+              </SelectTrigger>
+              <SelectContent>
+                {targetFloorObjects.map((obj) => (
+                  <SelectItem key={obj.id} value={obj.id}>
+                    {obj.label || obj.type} ({obj.x.toFixed(1)}, {obj.y.toFixed(1)})
+                  </SelectItem>
+                ))}
+                {targetFloorObjects.length === 0 && (
+                  <SelectItem value="" disabled>No linkable objects found</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
           )}
           <div className="flex gap-1">
-            <Tooltip content="Create cross-floor link">
-              <button
-                onClick={handleLink}
-                disabled={!targetFloorId || !targetObjectId}
-                className="text-xs bg-indigo-500 text-white px-2.5 py-1 rounded-md hover:bg-indigo-400 disabled:opacity-50 transition-all duration-150"
-              >
-                Link
-              </button>
-            </Tooltip>
-            <button
+            <Button
+              size="sm"
+              className="text-xs h-7"
+              onClick={handleLink}
+              disabled={!targetFloorId || !targetObjectId}
+            >
+              Link
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-7"
               onClick={() => setShowPanel(false)}
-              className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1 transition-colors"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
-        <Tooltip content="Link this object to an object on another floor">
-          <button
-            onClick={() => setShowPanel(true)}
-            disabled={otherFloors.length === 0}
-            className="text-xs text-indigo-400 hover:text-indigo-300 disabled:text-slate-600 transition-colors"
-          >
-            + Link to another floor
-          </button>
-        </Tooltip>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-xs p-0 h-auto text-muted-foreground hover:text-foreground"
+          onClick={() => setShowPanel(true)}
+          disabled={otherFloors.length === 0}
+        >
+          + Link to another floor
+        </Button>
       )}
     </div>
   );

@@ -1,7 +1,10 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import type { PositioningAnchor, AnchorType } from '@/types/database';
-import Tooltip from '@/components/ui/Tooltip';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface AnchorPanelProps {
   floorPlanId: string;
@@ -74,105 +77,111 @@ export default function AnchorPanel({ floorPlanId }: AnchorPanelProps) {
 
   return (
     <div className="flex flex-col gap-3 p-3 text-sm">
-      <h3 className="font-semibold text-slate-200 text-base">Positioning Anchors</h3>
+      <h3 className="font-semibold text-foreground text-base">Positioning Anchors</h3>
 
       {/* Stats */}
-      <div className="flex gap-2 text-xs text-slate-500">
+      <div className="flex gap-2 text-xs text-muted-foreground">
         <span>Total: {anchors.length}</span>
         <span>Active: {activeCount}</span>
         {lowBattery.length > 0 && (
-          <Tooltip content={`${lowBattery.length} anchor(s) with battery below 20%`}>
-            <span className="text-yellow-400">⚠️ Low battery: {lowBattery.length}</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-yellow-600">⚠️ Low battery: {lowBattery.length}</span>
+            </TooltipTrigger>
+            <TooltipContent>{lowBattery.length} anchor(s) with battery below 20%</TooltipContent>
           </Tooltip>
         )}
       </div>
 
       {/* Refresh */}
-      <Tooltip content="Refresh anchor list from server">
-        <button
-          onClick={loadAnchors}
-          disabled={loading}
-          className="w-full px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 rounded-md text-xs transition-all duration-150"
-        >
-          {loading ? '⏳ Loading...' : '🔄 Refresh'}
-        </button>
-      </Tooltip>
+      <Button
+        variant="secondary"
+        size="sm"
+        className="w-full text-xs"
+        onClick={loadAnchors}
+        disabled={loading}
+      >
+        {loading ? '⏳ Loading...' : '🔄 Refresh'}
+      </Button>
 
       {/* Anchor list */}
-      <div className="max-h-64 overflow-y-auto dark-scrollbar space-y-1">
-        {anchors.map((anchor) => {
-          const typeInfo = ANCHOR_TYPES.find((t) => t.value === anchor.type);
-          const isSelected = selectedAnchor === anchor.id;
+      <ScrollArea className="max-h-64">
+        <div className="space-y-1">
+          {anchors.map((anchor) => {
+            const typeInfo = ANCHOR_TYPES.find((t) => t.value === anchor.type);
+            const isSelected = selectedAnchor === anchor.id;
 
-          return (
-            <div
-              key={anchor.id}
-              onClick={() => setSelectedAnchor(isSelected ? null : anchor.id)}
-              className={`p-2 rounded-lg cursor-pointer transition-all duration-150 ${
-                isSelected ? 'bg-indigo-500/15 border border-indigo-500/40' : 'bg-white/[0.04] hover:bg-white/[0.08] border border-transparent'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <Tooltip content={typeInfo?.desc || anchor.type} position="right">
-                  <span className="text-slate-300 text-xs">
-                    {typeInfo?.icon} {typeInfo?.label || anchor.type}
-                  </span>
-                </Tooltip>
-                <Tooltip content={anchor.status === 'active' ? 'Active' : 'Inactive'}>
-                  <span className={`text-xs ${anchor.status === 'active' ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {anchor.status === 'active' ? '●' : '○'}
-                  </span>
-                </Tooltip>
-              </div>
-
-              {anchor.hardware_id && (
-                <div className="text-slate-600 text-xs mt-0.5 font-mono truncate">
-                  {anchor.hardware_id}
+            return (
+              <div
+                key={anchor.id}
+                onClick={() => setSelectedAnchor(isSelected ? null : anchor.id)}
+                className={`p-2 rounded-lg cursor-pointer transition-all duration-150 ${
+                  isSelected ? 'bg-accent border border-border' : 'hover:bg-accent/50 border border-transparent'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-foreground text-xs">
+                        {typeInfo?.icon} {typeInfo?.label || anchor.type}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">{typeInfo?.desc || anchor.type}</TooltipContent>
+                  </Tooltip>
+                  <Badge variant={anchor.status === 'active' ? 'default' : 'secondary'} className={`text-[10px] h-4 px-1.5 ${anchor.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                    {anchor.status === 'active' ? '● Active' : '○ Inactive'}
+                  </Badge>
                 </div>
-              )}
 
-              {isSelected && (
-                <div className="mt-2 space-y-1 border-t border-white/[0.06] pt-2">
-                  <div className="text-slate-500 text-xs">
-                    Position: ({anchor.x.toFixed(1)}, {anchor.y.toFixed(1)})
+                {anchor.hardware_id && (
+                  <div className="text-muted-foreground text-xs mt-0.5 font-mono truncate">
+                    {anchor.hardware_id}
                   </div>
-                  {anchor.battery_level !== null && (
-                    <div className={`text-xs ${anchor.battery_level < 20 ? 'text-yellow-400' : 'text-slate-500'}`}>
-                      🔋 {anchor.battery_level}%
+                )}
+
+                {isSelected && (
+                  <div className="mt-2 space-y-1 border-t border-border pt-2">
+                    <div className="text-muted-foreground text-xs">
+                      Position: ({anchor.x.toFixed(1)}, {anchor.y.toFixed(1)})
                     </div>
-                  )}
-                  {anchor.last_seen && (
-                    <div className="text-slate-600 text-xs">
-                      Last seen: {new Date(anchor.last_seen).toLocaleTimeString()}
-                    </div>
-                  )}
-                  <div className="flex gap-1 mt-1">
-                    <Tooltip content={anchor.status === 'active' ? 'Deactivate this anchor' : 'Activate this anchor'}>
-                      <button
+                    {anchor.battery_level !== null && (
+                      <div className={`text-xs ${anchor.battery_level < 20 ? 'text-yellow-600' : 'text-muted-foreground'}`}>
+                        🔋 {anchor.battery_level}%
+                      </div>
+                    )}
+                    {anchor.last_seen && (
+                      <div className="text-muted-foreground text-xs">
+                        Last seen: {new Date(anchor.last_seen).toLocaleTimeString()}
+                      </div>
+                    )}
+                    <div className="flex gap-1 mt-1">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="flex-1 text-xs h-7"
                         onClick={(e) => { e.stopPropagation(); toggleStatus(anchor); }}
-                        className="flex-1 px-2 py-1 bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 rounded-md text-xs transition-all duration-150"
                       >
                         {anchor.status === 'active' ? 'Deactivate' : 'Activate'}
-                      </button>
-                    </Tooltip>
-                    <Tooltip content="Delete this anchor permanently">
-                      <button
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-7 text-destructive hover:bg-destructive/10"
                         onClick={(e) => { e.stopPropagation(); deleteAnchor(anchor.id); }}
-                        className="px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-md text-xs transition-all duration-150"
                       >
                         🗑
-                      </button>
-                    </Tooltip>
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </ScrollArea>
 
       {anchors.length === 0 && !loading && (
-        <div className="text-slate-600 text-xs text-center py-4">
+        <div className="text-muted-foreground text-xs text-center py-4">
           No anchors placed on this floor.
           <br />
           Use the canvas tools to place beacons.

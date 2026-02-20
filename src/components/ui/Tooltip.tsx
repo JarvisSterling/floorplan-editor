@@ -1,94 +1,54 @@
-'use client';
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+"use client"
 
-interface TooltipProps {
-  content: string;
-  position?: 'top' | 'bottom' | 'left' | 'right';
-  delay?: number;
-  children: React.ReactNode;
-  className?: string;
+import * as React from "react"
+import { Tooltip as TooltipPrimitive } from "radix-ui"
+
+import { cn } from "@/lib/utils"
+
+function TooltipProvider({
+  delayDuration = 0,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
+  return <TooltipPrimitive.Provider data-slot="tooltip-provider" delayDuration={delayDuration} {...props} />
 }
 
-export default function Tooltip({ content, position = 'top', delay = 400, children, className }: TooltipProps) {
-  const [visible, setVisible] = useState(false);
-  const [coords, setCoords] = useState({ top: 0, left: 0 });
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const triggerRef = useRef<HTMLDivElement>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
-
-  const show = useCallback(() => {
-    timeoutRef.current = setTimeout(() => {
-      if (!triggerRef.current) return;
-      const rect = triggerRef.current.getBoundingClientRect();
-      const tt = tooltipRef.current;
-      const ttW = tt?.offsetWidth || 80;
-      const ttH = tt?.offsetHeight || 28;
-
-      let top = 0, left = 0;
-      switch (position) {
-        case 'top':
-          top = rect.top - ttH - 6;
-          left = rect.left + rect.width / 2 - ttW / 2;
-          break;
-        case 'bottom':
-          top = rect.bottom + 6;
-          left = rect.left + rect.width / 2 - ttW / 2;
-          break;
-        case 'left':
-          top = rect.top + rect.height / 2 - ttH / 2;
-          left = rect.left - ttW - 6;
-          break;
-        case 'right':
-          top = rect.top + rect.height / 2 - ttH / 2;
-          left = rect.right + 6;
-          break;
-      }
-      // Clamp to viewport
-      left = Math.max(4, Math.min(left, window.innerWidth - ttW - 4));
-      top = Math.max(4, top);
-
-      setCoords({ top, left });
-      setVisible(true);
-    }, delay);
-  }, [delay, position]);
-
-  const hide = useCallback(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    setVisible(false);
-  }, []);
-
-  useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }, []);
-
-  if (!content) return <>{children}</>;
-
+function Tooltip({
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Root>) {
   return (
-    <>
-      <div
-        ref={triggerRef}
-        onMouseEnter={show}
-        onMouseLeave={hide}
-        onMouseDown={hide}
-        className={`inline-flex ${className ?? ''}`}
+    <TooltipProvider>
+      <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+    </TooltipProvider>
+  )
+}
+
+function TooltipTrigger({
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
+  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+}
+
+function TooltipContent({
+  className,
+  sideOffset = 4,
+  children,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+  return (
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Content
+        data-slot="tooltip-content"
+        sideOffset={sideOffset}
+        className={cn(
+          "bg-primary text-primary-foreground animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit origin-(--radix-tooltip-content-transform-origin) rounded-md px-3 py-1.5 text-xs text-balance",
+          className
+        )}
+        {...props}
       >
         {children}
-      </div>
-      {visible && (
-        <div
-          ref={tooltipRef}
-          className="fixed z-[9999] px-2.5 py-1.5 text-xs font-medium text-white bg-gray-900/95 rounded-md shadow-lg backdrop-blur-sm pointer-events-none animate-tooltip-in whitespace-nowrap"
-          style={{ top: coords.top, left: coords.left }}
-        >
-          {content}
-          <div
-            className={`absolute w-2 h-2 bg-gray-900/95 rotate-45 ${
-              position === 'top' ? '-bottom-1 left-1/2 -translate-x-1/2' :
-              position === 'bottom' ? '-top-1 left-1/2 -translate-x-1/2' :
-              position === 'left' ? '-right-1 top-1/2 -translate-y-1/2' :
-              '-left-1 top-1/2 -translate-y-1/2'
-            }`}
-          />
-        </div>
-      )}
-    </>
-  );
+      </TooltipPrimitive.Content>
+    </TooltipPrimitive.Portal>
+  )
 }
+
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
